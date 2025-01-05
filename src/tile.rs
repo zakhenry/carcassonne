@@ -77,6 +77,9 @@ pub(crate) enum RenderCell {
     Road,
     City,
     Cloister,
+    Pennant,
+    Water,
+    Corner, // @todo remove
 }
 
 #[derive(Debug)]
@@ -99,6 +102,10 @@ impl Board {
                     .map(|t| (t.placement.coordinate.clone(), t)),
             ),
         }
+    }
+
+    pub fn placed_tile_count(&self) -> usize {
+        self.placed_tiles.len()
     }
 }
 

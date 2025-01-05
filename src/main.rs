@@ -13,5 +13,5 @@ fn main() {
         },
     }]);
 
-    dbg!(board);
+    println!("{}", board.placed_tile_count())
 }
