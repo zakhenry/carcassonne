@@ -1,17 +1,20 @@
-use crate::tile::{Board, BoardCoordinate, PlacedTile, TilePlacement};
+use crate::tile::{Board, BoardCoordinate, PlacedTile, RenderStyle, TilePlacement};
 use tile_definitions::CROSS_INTERSECTION;
+use crate::tile_definitions::THREE_WAY_JUNCTION_WITH_CITY;
 
 mod tile;
 mod tile_definitions;
 
 fn main() {
-    let board = Board::new(vec![PlacedTile {
-        tile: &CROSS_INTERSECTION,
+
+    let tile = PlacedTile {
+        tile: &THREE_WAY_JUNCTION_WITH_CITY,
         placement: TilePlacement {
             coordinate: BoardCoordinate { x: 0, y: 0 },
-            rotations: 0,
+            rotations: 1,
         },
-    }]);
+    };
 
-    println!("{}", board.placed_tile_count())
+    println!("{}", tile.render_to_lines(RenderStyle::TrueColor).join("\n"));
+
 }
