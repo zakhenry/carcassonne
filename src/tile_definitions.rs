@@ -2,11 +2,12 @@ use crate::tile::CardinalDirection::{
     East, EastNorthEast, EastSouthEast, North, NorthNorthEast, NorthNorthWest, South,
     SouthSouthEast, SouthSouthWest, West, WestNorthWest, WestSouthWest,
 };
-use crate::tile::{Region, RenderCell, TileCoordinate, TileDefinition, TileRenderRepresentation};
+use crate::tile::{Expansion, Region, RenderCell, TileCoordinate, TileDefinition, TileRenderRepresentation};
 
 // Definitions copied from https://cad.onshape.com/documents/04cfee738b84b4699685349a/w/f6c7a218fb2ae3244c5e18ee/e/e45463d6dd17036cc38b1be6
 
 pub const CROSS_INTERSECTION: TileDefinition = TileDefinition {
+    expansion: None,
     count: 1,
     name: "Cross intersection",
     render: ascii_to_tile(
@@ -56,6 +57,7 @@ FFFRFFF
     ],
 };
 pub const THREE_WAY_JUNCTION_WITH_CITY: TileDefinition = TileDefinition {
+    expansion: None,
     count: 3,
     name: "Three-way junction with city",
     render: ascii_to_tile(
@@ -102,6 +104,7 @@ FFCCCFF
     ],
 };
 pub const STRAIGHT_CITY_WITH_SIDE_FIELDS: TileDefinition = TileDefinition {
+    expansion: None,
     count: 1,
     name: "Straight city with side fields",
     render: ascii_to_tile(
@@ -139,6 +142,7 @@ FCCCCCF
     ],
 };
 pub const STRAIGHT_CITY_WITH_SIDE_FIELDS_AND_PENNANT: TileDefinition = TileDefinition {
+    expansion: None,
     count: 2,
     name: "Straight city with side fields and pennant",
     render: ascii_to_tile(
@@ -176,6 +180,7 @@ FCCCCCF
     ],
 };
 pub const STRAIGHT_ROAD_WITH_SIDE_CITY: TileDefinition = TileDefinition {
+    expansion: None,
     count: 4,
     name: "Straight road with side city",
     render: ascii_to_tile(
@@ -216,6 +221,7 @@ FFFFFFF
     ],
 };
 pub const FIELD_WITH_TWO_CORNER_CITIES: TileDefinition = TileDefinition {
+    expansion: None,
     count: 2,
     name: "Field with two corner cities",
     render: ascii_to_tile(
@@ -254,6 +260,7 @@ FFCCCFC
     ],
 };
 pub const CORNER_ROAD_WITH_PENNANTED_CORNER_CITY: TileDefinition = TileDefinition {
+    expansion: None,
     count: 2,
     name: "Corner road with pennanted corner city",
     render: ascii_to_tile(
@@ -295,6 +302,7 @@ FFRRFFC
     ],
 };
 pub const THREE_WAY_JUNCTION: TileDefinition = TileDefinition {
+    expansion: None,
     count: 4,
     name: "Three-way junction",
     render: ascii_to_tile(
@@ -342,6 +350,7 @@ FFFFFFF
     ],
 };
 pub const RIVER_TERMINATOR: TileDefinition = TileDefinition {
+    expansion: Some(Expansion::River),
     count: 2,
     name: "River terminator",
     render: ascii_to_tile(
@@ -376,6 +385,7 @@ FFFFFFF
     ],
 };
 pub const CORNER_ROAD: TileDefinition = TileDefinition {
+    expansion: None,
     count: 9,
     name: "Corner road",
     render: ascii_to_tile(
@@ -414,6 +424,7 @@ FFFRFFF
     ],
 };
 pub const RIVER_CORNER_WITH_ROAD_CORNER: TileDefinition = TileDefinition {
+    expansion: Some(Expansion::River),
     count: 1,
     name: "River corner with road corner",
     render: ascii_to_tile(
@@ -450,6 +461,7 @@ FFFWWFF
     ],
 };
 pub const CORNER_CITY: TileDefinition = TileDefinition {
+    expansion: None,
     count: 3,
     name: "Corner city",
     render: ascii_to_tile(
@@ -490,6 +502,7 @@ CCCCFFF
     ],
 };
 pub const SIDE_CITY_WITH_SIDE_ROAD_AND_PENNANT: TileDefinition = TileDefinition {
+    expansion: None,
     count: 2,
     name: "Side city with side road and pennant",
     render: ascii_to_tile(
@@ -534,6 +547,7 @@ CCFRFCC
     ],
 };
 pub const CORNER_ROAD_WITH_CORNER_CITY: TileDefinition = TileDefinition {
+    expansion: None,
     count: 3,
     name: "Corner road with corner city",
     render: ascii_to_tile(
@@ -575,6 +589,7 @@ FCCCCCC
     ],
 };
 pub const STRAIGHT_RIVER_WITH_TWO_SIDE_CITIES: TileDefinition = TileDefinition {
+    expansion: Some(Expansion::River),
     count: 1,
     name: "Straight river with two side cities",
     render: ascii_to_tile(
@@ -613,6 +628,7 @@ FFCCCFF
     ],
 };
 pub const CORNER_ROAD_WITH_SIDE_CITY: TileDefinition = TileDefinition {
+    expansion: None,
     count: 3,
     name: "Corner road with side city",
     render: ascii_to_tile(
@@ -653,6 +669,7 @@ FFFRFFF
     ],
 };
 pub const CLOISTER_WITH_ROAD_AND_RIVER: TileDefinition = TileDefinition {
+    expansion: Some(Expansion::River),
     count: 1,
     name: "Cloister with road and river",
     render: ascii_to_tile(
@@ -698,6 +715,7 @@ FFFTFFF
     ],
 };
 pub const CLOISTER_IN_FIELD: TileDefinition = TileDefinition {
+    expansion: None,
     count: 4,
     name: "Cloister in field",
     render: ascii_to_tile(
@@ -735,6 +753,7 @@ FFFFFFF
     ],
 };
 pub const THREE_SIDED_CITY: TileDefinition = TileDefinition {
+    expansion: None,
     count: 3,
     name: "Three sided city",
     render: ascii_to_tile(
@@ -771,6 +790,7 @@ CCCCCCC
     ],
 };
 pub const CENTRE_CITY_WITH_PENNANT: TileDefinition = TileDefinition {
+    expansion: None,
     count: 1,
     name: "Centre city with pennant",
     render: ascii_to_tile(
@@ -804,6 +824,7 @@ CCCCCCC
     }],
 };
 pub const SIDE_CITY_WITH_STRAIGHT_RIVER_AND_BRIDGE: TileDefinition = TileDefinition {
+    expansion: Some(Expansion::River),
     count: 1,
     name: "Side city with straight river and bridge",
     render: ascii_to_tile(
@@ -849,6 +870,7 @@ FFFRFFF
     ],
 };
 pub const STRAIGHT_ROAD: TileDefinition = TileDefinition {
+    expansion: None,
     count: 8,
     name: "Straight road",
     render: ascii_to_tile(
@@ -890,6 +912,7 @@ FFFRFFF
     ],
 };
 pub const STRAIGHT_RIVER_WITH_STRAIGHT_ROAD_AND_BRIDGE: TileDefinition = TileDefinition {
+    expansion: Some(Expansion::River),
     count: 1,
     name: "Straight river with straight road and bridge",
     render: ascii_to_tile(
@@ -930,6 +953,7 @@ FFFRFFF
     ],
 };
 pub const CORNER_CITY_WITH_PENNANT: TileDefinition = TileDefinition {
+    expansion: None,
     count: 2,
     name: "Corner city with pennant",
     render: ascii_to_tile(
@@ -970,6 +994,7 @@ CCPCCFF
     ],
 };
 pub const THREE_SIDED_CITY_WITH_PENNANT: TileDefinition = TileDefinition {
+    expansion: None,
     count: 1,
     name: "Three sided city with pennant",
     render: ascii_to_tile(
@@ -1006,6 +1031,7 @@ CCCCCCF
     ],
 };
 pub const CORNER_CITY_WITH_CORNER_RIVER: TileDefinition = TileDefinition {
+    expansion: Some(Expansion::River),
     count: 1,
     name: "Corner city with corner river",
     render: ascii_to_tile(
@@ -1046,6 +1072,7 @@ FFWWFFC
     ],
 };
 pub const STRAIGHT_RIVER: TileDefinition = TileDefinition {
+    expansion: Some(Expansion::River),
     count: 2,
     name: "Straight river",
     render: ascii_to_tile(
@@ -1086,6 +1113,7 @@ FFFWWFF
     ],
 };
 pub const CORNER_RIVER: TileDefinition = TileDefinition {
+    expansion: Some(Expansion::River),
     count: 2,
     name: "Corner river",
     render: ascii_to_tile(
@@ -1123,6 +1151,7 @@ FFFFFFF
     ],
 };
 pub const SIDE_CITY: TileDefinition = TileDefinition {
+    expansion: None,
     count: 5,
     name: "Side city",
     render: ascii_to_tile(
@@ -1159,6 +1188,7 @@ FFCCCFF
     ],
 };
 pub const OPPOSING_SIDE_CITIES: TileDefinition = TileDefinition {
+    expansion: None,
     count: 3,
     name: "Opposing side cities",
     render: ascii_to_tile(
@@ -1197,6 +1227,7 @@ FFCCCFF
     ],
 };
 pub const THREE_SIDED_CITY_WITH_ROAD: TileDefinition = TileDefinition {
+    expansion: None,
     count: 1,
     name: "Three sided city with road",
     render: ascii_to_tile(
@@ -1241,6 +1272,7 @@ CCCCCCF
     ],
 };
 pub const STRAIGHT_ROAD_WITH_RIGHT_CORNER_ROAD: TileDefinition = TileDefinition {
+    expansion: None,
     count: 3,
     name: "Straight road with right corner road",
     render: ascii_to_tile(
@@ -1281,6 +1313,7 @@ FFFRFFF
     ],
 };
 pub const CLOISTER_WITH_ROAD: TileDefinition = TileDefinition {
+    expansion: None,
     count: 2,
     name: "Cloister with road",
     render: ascii_to_tile(
@@ -1418,4 +1451,22 @@ const fn ascii_to_tile(ascii: &'static str) -> TileRenderRepresentation {
     }
 
     TileRenderRepresentation(repr)
+}
+
+
+#[cfg(test)]
+mod tests {
+
+
+    use super::*;
+
+    #[test]
+    fn test_all_water_tiles_have_expansion_declared_as_river() {
+        for tile in ALL_TILE_DEFINITIONS {
+            if tile.regions.iter().any(|r|matches!(r, Region::Water { .. })) {
+                assert!(matches!(tile.expansion, Some(Expansion::River)))
+            }
+        }
+    }
+
 }

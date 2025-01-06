@@ -4,7 +4,7 @@ use colored::{Color, ColoredString, Colorize};
 
 pub const TILE_WIDTH: usize = 7;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub(crate) struct TileCoordinate {
     pub(crate) x: u8,
     pub(crate) y: u8,
@@ -24,7 +24,7 @@ pub struct TilePlacement {
 
 // note that the diagonal corners are intentionally omitted because carcassonne tiles do not form
 // connected regions from touching corners
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub(crate) enum CardinalDirection {
     North,
     NorthNorthEast,
@@ -45,6 +45,15 @@ pub(crate) enum CardinalDirection {
 }
 
 #[derive(Debug)]
+pub(crate) enum RegionType {
+    City,
+    Field,
+    Cloister,
+    Road,
+    Water
+}
+
+#[derive(Debug, PartialEq)]
 pub(crate) enum Region {
     City {
         edges: &'static [CardinalDirection],
@@ -67,15 +76,21 @@ pub(crate) enum Region {
     },
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
+pub(crate) enum Expansion {
+    River
+}
+
+#[derive(Debug, PartialEq)]
 pub struct TileDefinition {
     pub(crate) count: u8,
     pub(crate) name: &'static str,
     pub(crate) render: TileRenderRepresentation,
     pub(crate) regions: &'static [Region],
+    pub(crate) expansion: Option<Expansion>
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub(crate) enum RenderCell {
     Field,
     Road,
@@ -169,29 +184,9 @@ impl PlacedTile {
 }
 
 
-#[derive(Debug)]
-pub struct Board {
-    placed_tiles: HashMap<BoardCoordinate, PlacedTile>,
-}
-
-impl Board {
-    pub(crate) fn new(tiles: Vec<PlacedTile>) -> Self {
-        Self {
-            placed_tiles: HashMap::from_iter(
-                tiles
-                    .into_iter()
-                    .map(|t| (t.placement.coordinate.clone(), t)),
-            ),
-        }
-    }
-
-    pub fn placed_tile_count(&self) -> usize {
-        self.placed_tiles.len()
-    }
-}
 
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub(crate) struct TileRenderRepresentation(pub [[RenderCell; 7]; 7]);
 
 impl TileRenderRepresentation {

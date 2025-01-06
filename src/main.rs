@@ -1,9 +1,12 @@
-use crate::tile::{Board, BoardCoordinate, PlacedTile, RenderStyle, TilePlacement};
-use tile_definitions::CROSS_INTERSECTION;
+use crate::tile::{BoardCoordinate, PlacedTile, RenderStyle, TilePlacement};
 use crate::tile_definitions::THREE_WAY_JUNCTION_WITH_CITY;
 
 mod tile;
 mod tile_definitions;
+mod board;
+mod player;
+mod regions;
+mod deck;
 
 fn main() {
 

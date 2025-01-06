@@ -5,3 +5,5 @@ edition = "2021"
 
 [dependencies]
 colored = "2.2.0"
+rand = "0.8.5"
+uuid = { version = "1.11.0", features = ["v4"] }
