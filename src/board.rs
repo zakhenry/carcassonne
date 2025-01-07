@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use crate::player::{Meeple, Player, RegionIndex};
 use crate::regions::{ConnectedRegion, UniqueTileRegion};
-use crate::tile::{BoardCoordinate, PlacedTile, RegionType, TileDefinition, TilePlacement};
+use crate::tile::{BoardCoordinate, PlacedTile, RegionType, RenderStyle, TileDefinition, TilePlacement};
 
 
 // private val regionIndex: MutableMap<UniqueTileRegion, ConnectedRegion> = mutableMapOf(),
@@ -108,5 +108,43 @@ impl Board {
         }
 
         possible_placements
+    }
+
+    pub(crate) fn render(&self) -> String {
+        let mut min_x= i8::MAX;
+        let mut min_y = i8::MAX;
+        let mut max_x= i8::MIN;
+        let mut max_y = i8::MIN;
+
+        for &BoardCoordinate { x, y } in self.placed_tiles.keys() {
+            min_x = min_x.min(x);
+            min_y = min_y.min(y);
+            max_x = max_x.max(x);
+            max_y = max_y.max(y);
+        }
+
+        let mut output = Vec::with_capacity(((max_y - min_y) * 7) as usize);
+        output.extend(std::iter::repeat(String::new()).take(output.capacity()));
+
+        for (row_idx, row) in (min_y..max_y).enumerate() {
+            for column in min_x..max_x {
+                let coord = BoardCoordinate {x: column, y: row};
+
+                let lines = if let Some(tile) = self.placed_tiles.get(&coord) {
+                    tile.render_to_lines(RenderStyle::TrueColor)
+                } else {
+                    vec![std::iter::repeat(' ').take(14).collect();7]
+                };
+
+                for (render_row, render) in lines.iter().enumerate() {
+
+                    let row_idx = row_idx * 7 + render_row;
+
+                    output.get_mut(row_idx).unwrap().push_str(render);
+                }
+            }
+        }
+
+        output.join("\n")
     }
 }

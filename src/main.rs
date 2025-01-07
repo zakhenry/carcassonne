@@ -49,6 +49,8 @@ fn main() {
 
     }
 
-    println!("Done, board has {} tiles placed", board.read().unwrap().placed_tile_count())
+    println!("Done, board has {} tiles placed", board.read().unwrap().placed_tile_count());
+
+    println!("{}", board.read().unwrap().render())
 
 }
