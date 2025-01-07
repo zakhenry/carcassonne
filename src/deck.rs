@@ -1,12 +1,11 @@
-use std::cell::RefCell;
-use std::collections::VecDeque;
-use std::ops::DerefMut;
-use std::rc::Rc;
 use crate::tile::{Expansion, TileDefinition};
 use crate::tile_definitions::{ALL_TILE_DEFINITIONS, RIVER_TERMINATOR};
 use rand::prelude::SliceRandom;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
+use std::cell::RefCell;
+use std::ops::DerefMut;
+use std::rc::Rc;
 
 struct BaseTileSequence {
     tiles: Vec<&'static TileDefinition>,
@@ -48,19 +47,15 @@ impl Iterator for BaseTileSequence {
         // once we find a tile, if we had discarded any tiles before we shuffle them back
         // into the stack
         if !discarded_tiles.is_empty() {
-            dbg!(discarded_tiles.iter().map(|t|t.name).collect::<Vec<_>>());
             self.tiles.append(&mut discarded_tiles);
             self.tiles.shuffle(self.rng.borrow_mut().deref_mut());
         }
 
-        dbg!(self.tiles.len());
 
         tile
     }
 }
 
-/// @todo there is a lot of similarity with the above basic sequence. it should be possible to
-/// dedupe the logic around try & reshuffle
 struct RiverTileSequence {
     tiles: Vec<&'static TileDefinition>,
     current_index: usize,
@@ -105,29 +100,10 @@ impl Iterator for RiverTileSequence {
             return Some(&RIVER_TERMINATOR);
         }
 
-        let mut discarded_tiles: Vec<&TileDefinition> = Vec::new();
-
-        loop {
-            if (self.tile_can_be_placed)(tile?) {
-
-                break;
-            } else {
-                discarded_tiles.push(tile?);
-                tile = self.tiles.pop();
-            }
-
-
-            if self.tiles.is_empty() {
-                self.river_exhausted = true;
-                return Some(&RIVER_TERMINATOR);
-            }
-        }
-
-        // once we find a tile, if we had discarded any tiles before we shuffle them back
-        // into the stack
-        if !discarded_tiles.is_empty() {
-            self.tiles.append(&mut discarded_tiles);
-            self.tiles.shuffle(self.rng.borrow_mut().deref_mut())
+        // The official ruling from Hans im Glück is "Try to think while playing. Players may have
+        // an unfinished River...but it‘s their own fault."
+        if !(self.tile_can_be_placed)(tile?) {
+            return None;
         }
 
         self.current_index += 1;
@@ -172,8 +148,8 @@ impl Iterator for Deck {
 
 #[cfg(test)]
 mod tests {
-    use crate::tile_definitions::{STRAIGHT_RIVER, THREE_SIDED_CITY_WITH_ROAD};
     use super::*;
+    use crate::tile_definitions::{STRAIGHT_RIVER, THREE_SIDED_CITY_WITH_ROAD};
 
     #[test]
     fn test_base_deck_yields_only_base_tiles() {
@@ -230,7 +206,6 @@ mod tests {
         let river_tile_names: Vec<&'static str> = RiverTileSequence::new(rng, |tile| tile.name != STRAIGHT_RIVER.name).map(|t| t.name).collect();
 
         assert!(!river_tile_names.contains(&STRAIGHT_RIVER.name));
-        assert_eq!(river_tile_names.len(), (12 - STRAIGHT_RIVER.count) as usize);
     }
 
     #[test]
@@ -247,6 +222,5 @@ mod tests {
 
         assert_eq!(board_tiles.len(), 83);
         assert!(!board_tiles.contains(&&test_tile))
-
     }
 }
