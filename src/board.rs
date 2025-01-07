@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use crate::player::{Meeple, Player, RegionIndex};
 use crate::regions::{ConnectedRegion, UniqueTileRegion};
-use crate::tile::{BoardCoordinate, PlacedTile, RegionType, RenderStyle, TileDefinition, TilePlacement};
+use crate::tile::{BoardCoordinate, PlacedTile, RegionType, RenderStyle, TileDefinition, TilePlacement, TILE_WIDTH};
 
 
 // private val regionIndex: MutableMap<UniqueTileRegion, ConnectedRegion> = mutableMapOf(),
@@ -13,7 +13,7 @@ use crate::tile::{BoardCoordinate, PlacedTile, RegionType, RenderStyle, TileDefi
 #[derive(Debug)]
 struct RegionScore {
     region: RegionType,
-    score: u32
+    score: u32,
 }
 
 #[derive(Debug)]
@@ -26,7 +26,7 @@ pub struct Board {
     score_record: Vec<HashMap<Player, u32>>,
     placed_meeple: HashMap<PlacedTile, Meeple>,
     liberated_meeple: HashMap<PlacedTile, Meeple>,
-    current_score: HashMap<Player, Vec<RegionScore>>
+    current_score: HashMap<Player, Vec<RegionScore>>,
 }
 
 pub(crate) struct MoveHint {
@@ -35,24 +35,44 @@ pub(crate) struct MoveHint {
     // @todo score
 }
 
+pub enum InvalidTilePlacement {
+    TileAlreadyAtCoordinate,
+    TileDoesNotContactPlacedTiles,
+    TileEdgesDoNotMatchPlacedTiles,
+    OtherMeepleAlreadyInConnectedRegion,
+    RiverMustBeConnected,
+    RiverMustNotImmediatelyTurnOnItself,
+}
+
 impl Board {
     pub(crate) fn get_move_hints(&self, tile: &TileDefinition) -> Vec<MoveHint> {
+        let possible_coordinates = self.possible_next_tile_coordinates();
 
-        let possible_coordinates = self.possible_next_tile_placements();
+        let candidate_tile_placements = possible_coordinates.into_iter().flat_map(|coordinate| {
 
-        if let Some(coordinate) = possible_coordinates.into_iter().next() {
+            // here we discard duplicate rotated sequences as these represent tiles with rotational
+            // symmetry so it doesn't make sense to offer it as a placement variant
 
-            // @todo implement valid move hinting
-            vec![MoveHint {
-                tile_placement: TilePlacement {
-                    coordinate,
-                    rotations: 0,
-                },
+            let mut region_sequences: HashSet<Vec<RegionType>> = HashSet::new();
+
+            (0..4).into_iter().filter(move |&rotations| {
+                let region_sequence = tile.list_oriented_regions(rotations);
+
+                region_sequences.insert(region_sequence)
+            }).map(move |rotations| TilePlacement {
+                coordinate,
+                rotations,
+            })
+        });
+
+
+        candidate_tile_placements
+            .filter(|tile_placement|self.validate_tile_placement(tile_placement).is_ok())
+            .map(|tile_placement|MoveHint {
+                tile_placement,
                 meeple_placement: None,
-            }]
-        } else {
-            Vec::new()
-        }
+            })
+            .collect()
     }
 
     pub(crate) fn new(players: Vec<Player>) -> Self {
@@ -66,9 +86,7 @@ impl Board {
         Self {
             players,
             placed_tiles: HashMap::from_iter(
-                tiles
-                    .into_iter()
-                    .map(|t| (t.placement.coordinate.clone(), t)),
+                tiles.into_iter().map(|t| (t.placement.coordinate.clone(), t)),
             ),
             ..Default::default()
         }
@@ -82,10 +100,9 @@ impl Board {
         self.placed_tiles.insert(tile.placement.coordinate, tile);
     }
 
-    fn possible_next_tile_placements(&self) -> HashSet<BoardCoordinate> {
-
+    fn possible_next_tile_coordinates(&self) -> HashSet<BoardCoordinate> {
         if self.placed_tiles.is_empty() {
-            return HashSet::from([BoardCoordinate::new(0, 0)])
+            return HashSet::from([BoardCoordinate::new(0, 0)]);
         }
 
         let mut visited: HashSet<BoardCoordinate> = self.placed_tiles.keys().cloned().collect();
@@ -93,7 +110,6 @@ impl Board {
         let mut possible_placements: HashSet<BoardCoordinate> = HashSet::new();
 
         for coordinate in self.placed_tiles.keys() {
-
             for adjacent_coordinate in coordinate.adjacent_coordinates().values() {
                 if visited.contains(adjacent_coordinate) {
                     continue;
@@ -104,16 +120,23 @@ impl Board {
             }
 
             visited.insert(*coordinate);
-
         }
 
         possible_placements
     }
 
+    pub(crate) fn validate_tile_placement(&self, tile_placement: &TilePlacement) -> Result<(), InvalidTilePlacement> {
+        Ok(())
+    }
+
     pub(crate) fn render(&self) -> String {
-        let mut min_x= i8::MAX;
+        if self.placed_tiles.is_empty() {
+            return "[Empty board]".to_string();
+        }
+
+        let mut min_x = i8::MAX;
         let mut min_y = i8::MAX;
-        let mut max_x= i8::MIN;
+        let mut max_x = i8::MIN;
         let mut max_y = i8::MIN;
 
         for &BoardCoordinate { x, y } in self.placed_tiles.keys() {
@@ -123,22 +146,23 @@ impl Board {
             max_y = max_y.max(y);
         }
 
-        let mut output = Vec::with_capacity(((max_y - min_y) * 7) as usize);
+        let mut output = Vec::with_capacity((max_y - min_y) as usize * TILE_WIDTH);
+        // note we can't pre-allocate the width of the board as the color control chars make each
+        // row a different length depending on what regions are represented
         output.extend(std::iter::repeat(String::new()).take(output.capacity()));
 
         for (row_idx, row) in (min_y..max_y).enumerate() {
             for column in min_x..max_x {
-                let coord = BoardCoordinate {x: column, y: row};
+                let coord = BoardCoordinate { x: column, y: row };
 
                 let lines = if let Some(tile) = self.placed_tiles.get(&coord) {
                     tile.render_to_lines(RenderStyle::TrueColor)
                 } else {
-                    vec![std::iter::repeat(' ').take(14).collect();7]
+                    vec![std::iter::repeat(' ').take(TILE_WIDTH * 2).collect(); TILE_WIDTH]
                 };
 
                 for (render_row, render) in lines.iter().enumerate() {
-
-                    let row_idx = row_idx * 7 + render_row;
+                    let row_idx = row_idx * TILE_WIDTH + render_row;
 
                     output.get_mut(row_idx).unwrap().push_str(render);
                 }

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
 use colored::{Color, ColoredString, Colorize};
+use crate::player::Player;
 
 pub const TILE_WIDTH: usize = 7;
 
@@ -39,7 +40,7 @@ pub struct TilePlacement {
 
 // note that the diagonal corners are intentionally omitted because carcassonne tiles do not form
 // connected regions from touching corners
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub(crate) enum CardinalDirection {
     North,
     NorthNorthEast,
@@ -55,11 +56,34 @@ pub(crate) enum CardinalDirection {
     WestSouthWest,
     West,
     WestNorthWest,
+
     //  NorthWest,
     NorthNorthWest,
 }
 
-#[derive(Debug)]
+pub(crate) const PRIMARY_CARDINAL_DIRECTIONS: &[CardinalDirection; 4] = &[
+    CardinalDirection::North,
+    CardinalDirection::East,
+    CardinalDirection::South,
+    CardinalDirection::West
+];
+
+pub(crate) const PERIMETER_REGION_DIRECTIONS: &[CardinalDirection; 12] = &[
+    CardinalDirection::NorthNorthWest,
+    CardinalDirection::North,
+    CardinalDirection::NorthNorthEast,
+    CardinalDirection::EastNorthEast,
+    CardinalDirection::East,
+    CardinalDirection::EastSouthEast,
+    CardinalDirection::SouthSouthEast,
+    CardinalDirection::South,
+    CardinalDirection::SouthSouthWest,
+    CardinalDirection::WestSouthWest,
+    CardinalDirection::West,
+    CardinalDirection::WestNorthWest,
+];
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub(crate) enum RegionType {
     City,
     Field,
@@ -91,6 +115,29 @@ pub(crate) enum Region {
     },
 }
 
+impl Region {
+    fn edges(&self) -> &'static [CardinalDirection] {
+        match self {
+            Region::City { edges, .. } => edges,
+            Region::Field { edges, .. } => edges,
+            Region::Road { edges, .. } => edges,
+            Region::Water { edges, .. } => edges,
+            Region::Cloister { .. } => &[]
+        }
+    }
+
+    // @todo the existence of the two enums is a code smell. Some refactoring is needed!
+    fn region_type(&self) -> RegionType {
+        match self {
+            Region::City { .. } => RegionType::City,
+            Region::Field { .. } => RegionType::Field,
+            Region::Road { .. } => RegionType::Road,
+            Region::Water { .. } => RegionType::Water,
+            Region::Cloister { .. } => RegionType::Cloister
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub(crate) enum Expansion {
     River
@@ -103,6 +150,37 @@ pub struct TileDefinition {
     pub(crate) render: TileRenderRepresentation,
     pub(crate) regions: &'static [Region],
     pub(crate) expansion: Option<Expansion>
+}
+
+impl TileDefinition {
+
+    // @todo consider BTreeMap to give an order to the map, thus eliminating `perimeter_regions` method
+    fn directed_regions(&self) -> HashMap<CardinalDirection, &Region> {
+        let mut map = HashMap::with_capacity(PERIMETER_REGION_DIRECTIONS.len());
+
+        for region in self.regions {
+            for edge in region.edges() {
+                map.insert(*edge, region);
+            }
+        }
+
+        map
+    }
+    /// The list of region types around the perimeter of the definition
+    /// * no rotation applied
+    /// * starting from NorthNorthWest, going clockwise
+    fn perimeter_regions(&self) -> Vec<RegionType> {
+
+        let directed_regions = self.directed_regions();
+
+        PERIMETER_REGION_DIRECTIONS.iter().filter_map(|direction|directed_regions.get(direction).map(|r|r.region_type())).collect()
+    }
+
+    pub(crate) fn list_oriented_regions(&self, rotations: u8) -> Vec<RegionType> {
+        let perimeter = self.perimeter_regions().into_iter().cycle();
+
+        perimeter.skip((rotations * 3) as usize).take(12).collect()
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -221,3 +299,28 @@ impl TileRenderRepresentation {
     }
 }
 
+
+#[cfg(test)]
+mod tests {
+    use crate::tile_definitions::SIDE_CITY_WITH_STRAIGHT_RIVER_AND_BRIDGE;
+    use super::*;
+    use super::RegionType::*;
+
+    #[test]
+    fn test_perimeter_regions_returns_expected_result() {
+
+        let perimeter = SIDE_CITY_WITH_STRAIGHT_RIVER_AND_BRIDGE.perimeter_regions();
+
+        assert_eq!(perimeter, vec![City, City, City, Field, Water, Field, Field, Road, Field, Field, Water, Field])
+
+    }
+    #[test]
+    fn test_oriented_regions_returns_expected_result() {
+
+        let perimeter = SIDE_CITY_WITH_STRAIGHT_RIVER_AND_BRIDGE.list_oriented_regions(3);
+
+        assert_eq!(perimeter, vec![Field, Water, Field, City, City, City, Field, Water, Field, Field, Road, Field])
+
+    }
+
+}
