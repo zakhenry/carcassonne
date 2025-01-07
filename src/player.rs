@@ -39,12 +39,23 @@ impl Player {
 
         player
     }
+
+    pub(crate) fn black() -> Self {
+        Self::new(PlayerColor::Black)
+    }
+
+    pub(crate) fn green() -> Self {
+        Self::new(PlayerColor::Green)
+    }
 }
+
+#[derive(Debug)]
+pub(crate) struct RegionIndex(usize);
 
 #[derive(Debug)]
 struct MeepleLocation {
     placed_tile: PlacedTile,
-    region_index: usize
+    region_index: RegionIndex
 }
 
 #[derive(Debug)]

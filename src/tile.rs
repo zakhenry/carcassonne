@@ -10,10 +10,25 @@ pub(crate) struct TileCoordinate {
     pub(crate) y: u8,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub struct BoardCoordinate {
-    pub(crate) x: u8,
-    pub(crate) y: u8,
+    pub(crate) x: i8,
+    pub(crate) y: i8,
+}
+
+impl BoardCoordinate {
+    pub(crate) fn new(x: i8, y: i8) -> Self {
+        Self {x, y}
+    }
+
+    pub(crate) fn adjacent_coordinates(&self) -> HashMap<CardinalDirection, BoardCoordinate> {
+        HashMap::from([
+            (CardinalDirection::North, BoardCoordinate::new(self.x, self.y - 1)),
+            (CardinalDirection::East, BoardCoordinate::new(self.x + 1, self.y)),
+            (CardinalDirection::South, BoardCoordinate::new(self.x, self.y + 1)),
+            (CardinalDirection::West, BoardCoordinate::new(self.x - 1, self.y)),
+        ])
+    }
 }
 
 #[derive(Debug)]
@@ -24,7 +39,7 @@ pub struct TilePlacement {
 
 // note that the diagonal corners are intentionally omitted because carcassonne tiles do not form
 // connected regions from touching corners
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub(crate) enum CardinalDirection {
     North,
     NorthNorthEast,
@@ -98,7 +113,7 @@ pub(crate) enum RenderCell {
     Cloister,
     Pennant,
     Water,
-    Corner, // @todo remove
+    Corner, // @todo remove?
 }
 
 impl RenderCell {
@@ -108,9 +123,9 @@ impl RenderCell {
             Self::Field => (Color::Green, Color::TrueColor { r: 143, g: 185, b: 45}, Color::TrueColor { r: 165, g: 184, b: 90}, Color::TrueColor { r: 85, g: 122, b: 30}),
             Self::Road => (Color::BrightBlack, Color::TrueColor { r: 190, g: 190, b: 190}, Color::TrueColor { r: 220, g: 220, b: 220}, Color::TrueColor { r: 150, g: 150, b: 150}),
             Self::City => (Color::Yellow, Color::TrueColor { r: 199, g: 147, b: 88}, Color::TrueColor { r: 208, g: 169, b: 116}, Color::TrueColor { r: 154, g: 94, b: 56}),
-            Self::Cloister => (Color::BrightWhite, Color::Red, Color::Red, Color::Red),
+            Self::Cloister => (Color::BrightWhite, Color::BrightWhite, Color::BrightWhite, Color::BrightWhite),
             Self::Pennant => (Color::Red, Color::Red, Color::Red, Color::Red),
-            Self::Water => (Color::Blue, Color::Red, Color::Red, Color::Red),
+            Self::Water => (Color::Blue, Color::TrueColor { r: 143, g: 163, b: 215}, Color::TrueColor { r: 173, g: 186, b: 221}, Color::TrueColor { r: 123, g: 142, b: 177}),
             Self::Corner => (Color::Black, Color::Red, Color::Red, Color::Red),
         }
     }

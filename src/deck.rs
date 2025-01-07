@@ -9,19 +9,22 @@ use std::rc::Rc;
 
 struct BaseTileSequence {
     tiles: Vec<&'static TileDefinition>,
-    tile_can_be_placed: fn(&TileDefinition) -> bool,
+    tile_can_be_placed: Box<dyn Fn(&'static TileDefinition) -> bool>,
     rng: Rc<RefCell<StdRng>>,
 }
 
 impl BaseTileSequence {
-    fn new(rng: Rc<RefCell<StdRng>>, tile_can_be_placed: fn(&TileDefinition) -> bool) -> Self {
+    fn new<F>(rng: Rc<RefCell<StdRng>>, tile_can_be_placed: F) -> Self
+    where
+        F: Fn(&TileDefinition) -> bool + 'static,
+    {
         let mut tiles: Vec<_> = ALL_TILE_DEFINITIONS.iter().filter(|t| t.expansion.is_none()).flat_map(|t| vec![t; t.count as usize]).collect();
 
         tiles.shuffle(rng.borrow_mut().deref_mut());
 
         Self {
             tiles,
-            tile_can_be_placed,
+            tile_can_be_placed: Box::new(tile_can_be_placed),
             rng,
         }
     }
@@ -60,12 +63,15 @@ struct RiverTileSequence {
     tiles: Vec<&'static TileDefinition>,
     current_index: usize,
     river_exhausted: bool,
-    tile_can_be_placed: fn(&TileDefinition) -> bool,
+    tile_can_be_placed: Box<dyn Fn(&TileDefinition) -> bool>,
     rng: Rc<RefCell<StdRng>>,
 }
 
 impl RiverTileSequence {
-    fn new(rng: Rc<RefCell<StdRng>>, tile_can_be_placed: fn(&TileDefinition) -> bool) -> Self {
+    fn new<F>(rng: Rc<RefCell<StdRng>>, tile_can_be_placed: F) -> Self
+    where
+        F: Fn(&TileDefinition) -> bool + 'static,
+    {
         let mut tiles: Vec<_> = ALL_TILE_DEFINITIONS.iter().filter(|t| matches!(t.expansion, Some(Expansion::River)) && t != &&RIVER_TERMINATOR).flat_map(|t| vec![t; t.count as usize]).collect();
 
         tiles.shuffle(rng.borrow_mut().deref_mut());
@@ -74,7 +80,7 @@ impl RiverTileSequence {
             tiles,
             current_index: 0,
             river_exhausted: false,
-            tile_can_be_placed,
+            tile_can_be_placed: Box::new(tile_can_be_placed),
             rng,
         }
     }
@@ -111,16 +117,19 @@ impl Iterator for RiverTileSequence {
     }
 }
 
-struct Deck {
+pub struct Deck {
     river_tiles: Option<Box<dyn Iterator<Item=&'static TileDefinition>>>,
     base_tiles: BaseTileSequence,
     river_exhausted: bool,
 }
 
 impl Deck {
-    fn new(include_river: bool, rng: Rc<RefCell<StdRng>>, tile_can_be_placed: fn(&TileDefinition) -> bool) -> Self {
+    pub(crate) fn new<F>(include_river: bool, rng: Rc<RefCell<StdRng>>, tile_can_be_placed: F) -> Self
+    where
+        F: Fn(&TileDefinition) -> bool + Clone + 'static,
+    {
         Self {
-            river_tiles: if include_river { Some(Box::new(RiverTileSequence::new(rng.clone(), tile_can_be_placed))) } else { None },
+            river_tiles: if include_river { Some(Box::new(RiverTileSequence::new(rng.clone(), tile_can_be_placed.clone()))) } else { None },
             base_tiles: BaseTileSequence::new(rng, tile_can_be_placed),
             river_exhausted: !include_river,
         }
