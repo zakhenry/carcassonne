@@ -1,17 +1,17 @@
 // data class UniqueTileRegion(val tileId: UUID, val regionIndex: Int, val region: Region, val edgeless: Boolean)
 
+use crate::player::Meeple;
+use crate::tile::{Region, RegionType};
 use std::collections::HashSet;
 use std::rc::Rc;
 use uuid::Uuid;
-use crate::player::Meeple;
-use crate::tile::{Region, RegionType};
 
 #[derive(Debug)]
-pub(crate)  struct UniqueTileRegion {
+pub(crate) struct UniqueTileRegion {
     tile_id: usize,
     region_index: usize,
     region: &'static Region,
-    edgeless: bool
+    edgeless: bool,
 }
 
 #[derive(Debug)]

@@ -2,7 +2,9 @@ use crate::tile::CardinalDirection::{
     East, EastNorthEast, EastSouthEast, North, NorthNorthEast, NorthNorthWest, South,
     SouthSouthEast, SouthSouthWest, West, WestNorthWest, WestSouthWest,
 };
-use crate::tile::{Expansion, Region, RenderCell, TileCoordinate, TileDefinition, TileRenderRepresentation};
+use crate::tile::{
+    Expansion, Region, RenderCell, TileCoordinate, TileDefinition, TileRenderRepresentation,
+};
 
 // Definitions copied from https://cad.onshape.com/documents/04cfee738b84b4699685349a/w/f6c7a218fb2ae3244c5e18ee/e/e45463d6dd17036cc38b1be6
 
@@ -1453,20 +1455,21 @@ const fn ascii_to_tile(ascii: &'static str) -> TileRenderRepresentation {
     TileRenderRepresentation(repr)
 }
 
-
 #[cfg(test)]
 mod tests {
-
 
     use super::*;
 
     #[test]
     fn test_all_water_tiles_have_expansion_declared_as_river() {
         for tile in ALL_TILE_DEFINITIONS {
-            if tile.regions.iter().any(|r|matches!(r, Region::Water { .. })) {
+            if tile
+                .regions
+                .iter()
+                .any(|r| matches!(r, Region::Water { .. }))
+            {
                 assert!(matches!(tile.expansion, Some(Expansion::River)))
             }
         }
     }
-
 }

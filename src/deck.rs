@@ -16,9 +16,13 @@ struct BaseTileSequence {
 impl BaseTileSequence {
     fn new<F>(rng: Rc<RefCell<StdRng>>, tile_can_be_placed: F) -> Self
     where
-        F: Fn(&TileDefinition) -> bool + 'static,
+        F: Fn(&'static TileDefinition) -> bool + 'static,
     {
-        let mut tiles: Vec<_> = ALL_TILE_DEFINITIONS.iter().filter(|t| t.expansion.is_none()).flat_map(|t| vec![t; t.count as usize]).collect();
+        let mut tiles: Vec<_> = ALL_TILE_DEFINITIONS
+            .iter()
+            .filter(|t| t.expansion.is_none())
+            .flat_map(|t| vec![t; t.count as usize])
+            .collect();
 
         tiles.shuffle(rng.borrow_mut().deref_mut());
 
@@ -54,7 +58,6 @@ impl Iterator for BaseTileSequence {
             self.tiles.shuffle(self.rng.borrow_mut().deref_mut());
         }
 
-
         tile
     }
 }
@@ -63,16 +66,20 @@ struct RiverTileSequence {
     tiles: Vec<&'static TileDefinition>,
     current_index: usize,
     river_exhausted: bool,
-    tile_can_be_placed: Box<dyn Fn(&TileDefinition) -> bool>,
+    tile_can_be_placed: Box<dyn Fn(&'static TileDefinition) -> bool>,
     rng: Rc<RefCell<StdRng>>,
 }
 
 impl RiverTileSequence {
     fn new<F>(rng: Rc<RefCell<StdRng>>, tile_can_be_placed: F) -> Self
     where
-        F: Fn(&TileDefinition) -> bool + 'static,
+        F: Fn(&'static TileDefinition) -> bool + 'static,
     {
-        let mut tiles: Vec<_> = ALL_TILE_DEFINITIONS.iter().filter(|t| matches!(t.expansion, Some(Expansion::River)) && t != &&RIVER_TERMINATOR).flat_map(|t| vec![t; t.count as usize]).collect();
+        let mut tiles: Vec<_> = ALL_TILE_DEFINITIONS
+            .iter()
+            .filter(|t| matches!(t.expansion, Some(Expansion::River)) && t != &&RIVER_TERMINATOR)
+            .flat_map(|t| vec![t; t.count as usize])
+            .collect();
 
         tiles.shuffle(rng.borrow_mut().deref_mut());
 
@@ -118,18 +125,29 @@ impl Iterator for RiverTileSequence {
 }
 
 pub struct Deck {
-    river_tiles: Option<Box<dyn Iterator<Item=&'static TileDefinition>>>,
+    river_tiles: Option<Box<dyn Iterator<Item = &'static TileDefinition>>>,
     base_tiles: BaseTileSequence,
     river_exhausted: bool,
 }
 
 impl Deck {
-    pub(crate) fn new<F>(include_river: bool, rng: Rc<RefCell<StdRng>>, tile_can_be_placed: F) -> Self
+    pub(crate) fn new<F>(
+        include_river: bool,
+        rng: Rc<RefCell<StdRng>>,
+        tile_can_be_placed: F,
+    ) -> Self
     where
-        F: Fn(&TileDefinition) -> bool + Clone + 'static,
+        F: Fn(&'static TileDefinition) -> bool + Clone + 'static,
     {
         Self {
-            river_tiles: if include_river { Some(Box::new(RiverTileSequence::new(rng.clone(), tile_can_be_placed.clone()))) } else { None },
+            river_tiles: if include_river {
+                Some(Box::new(RiverTileSequence::new(
+                    rng.clone(),
+                    tile_can_be_placed.clone(),
+                )))
+            } else {
+                None
+            },
             base_tiles: BaseTileSequence::new(rng, tile_can_be_placed),
             river_exhausted: !include_river,
         }
@@ -154,7 +172,6 @@ impl Iterator for Deck {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -177,9 +194,13 @@ mod tests {
         let rng_1_copy = Rc::new(RefCell::new(StdRng::seed_from_u64(1)));
         let rng_2 = Rc::new(RefCell::new(StdRng::seed_from_u64(2)));
 
-        let base_deck_1: Vec<&'static str> = Deck::new(false, rng_1, |_| true).map(|t| t.name).collect();
-        let base_deck_1_copy: Vec<&'static str> = Deck::new(false, rng_1_copy, |_| true).map(|t| t.name).collect();
-        let base_deck_2: Vec<&'static str> = Deck::new(false, rng_2, |_| true).map(|t| t.name).collect();
+        let base_deck_1: Vec<&'static str> =
+            Deck::new(false, rng_1, |_| true).map(|t| t.name).collect();
+        let base_deck_1_copy: Vec<&'static str> = Deck::new(false, rng_1_copy, |_| true)
+            .map(|t| t.name)
+            .collect();
+        let base_deck_2: Vec<&'static str> =
+            Deck::new(false, rng_2, |_| true).map(|t| t.name).collect();
 
         assert_eq!(base_deck_1, base_deck_1_copy);
         assert_ne!(base_deck_1, base_deck_2);
@@ -188,7 +209,9 @@ mod tests {
     #[test]
     fn river_starts_and_ends_with_terminator() {
         let rng = Rc::new(RefCell::new(StdRng::seed_from_u64(0)));
-        let river_tile_names: Vec<&'static str> = RiverTileSequence::new(rng, |_| true).map(|t| t.name).collect();
+        let river_tile_names: Vec<&'static str> = RiverTileSequence::new(rng, |_| true)
+            .map(|t| t.name)
+            .collect();
 
         assert_eq!(river_tile_names.first().unwrap(), &"River terminator");
         assert_eq!(river_tile_names.last().unwrap(), &"River terminator");
@@ -201,7 +224,10 @@ mod tests {
 
         let river_deck = Deck::new(true, rng, |_| true);
 
-        let (river_tiles, base_tiles): (Vec<_>, Vec<_>) = river_deck.enumerate().map(|(idx, tile)| (idx, &tile.expansion)).partition(|(_, expansion)| matches!(expansion, Some(Expansion::River)));
+        let (river_tiles, base_tiles): (Vec<_>, Vec<_>) = river_deck
+            .enumerate()
+            .map(|(idx, tile)| (idx, &tile.expansion))
+            .partition(|(_, expansion)| matches!(expansion, Some(Expansion::River)));
 
         let max_river = river_tiles.into_iter().map(|(idx, _)| idx).max().unwrap();
         let min_base = base_tiles.into_iter().map(|(idx, _)| idx).min().unwrap();
@@ -212,7 +238,10 @@ mod tests {
     #[test]
     fn river_skips_tiles_that_cannot_be_placed() {
         let rng = Rc::new(RefCell::new(StdRng::seed_from_u64(0)));
-        let river_tile_names: Vec<&'static str> = RiverTileSequence::new(rng, |tile| tile.name != STRAIGHT_RIVER.name).map(|t| t.name).collect();
+        let river_tile_names: Vec<&'static str> =
+            RiverTileSequence::new(rng, |tile| tile.name != STRAIGHT_RIVER.name)
+                .map(|t| t.name)
+                .collect();
 
         assert!(!river_tile_names.contains(&STRAIGHT_RIVER.name));
     }
@@ -225,7 +254,9 @@ mod tests {
 
         assert_eq!(test_tile.count, 1);
 
-        let mut deck = Deck::new(true, rng, |tile| tile.name != THREE_SIDED_CITY_WITH_ROAD.name);
+        let mut deck = Deck::new(true, rng, |tile| {
+            tile.name != THREE_SIDED_CITY_WITH_ROAD.name
+        });
 
         let board_tiles: Vec<_> = deck.by_ref().collect();
 
