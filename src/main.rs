@@ -30,16 +30,19 @@ fn main() {
 
     for tile in deck {
 
-        let move_hint = board.read().unwrap().get_move_hints(tile).into_iter().next();
+        let move_hints =board.read().unwrap().get_move_hints(tile);
+        let move_hint = move_hints.iter().max_by_key(|&hint|{
+            board.read().unwrap().list_adjacent_tiles(&hint.tile_placement.coordinate).iter().filter_map(|(_, t)| *t).count()
+        });
 
         if let Some(random_move) = move_hint {
 
             let tile = PlacedTile {
                 tile,
-                placement: random_move.tile_placement,
+                placement: random_move.tile_placement.clone(),
             };
 
-            println!("{}", tile.render_to_lines(RenderStyle::TrueColor).join("\n"));
+            // println!("{}", tile.render_to_lines(RenderStyle::TrueColor).join("\n"));
 
             board.write().unwrap().place_tile(tile)
 

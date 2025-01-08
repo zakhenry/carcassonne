@@ -47,6 +47,10 @@ impl Player {
     pub(crate) fn green() -> Self {
         Self::new(PlayerColor::Green)
     }
+
+    pub(crate) fn red() -> Self {
+        Self::new(PlayerColor::Red)
+    }
 }
 
 #[derive(Debug)]

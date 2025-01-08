@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt::Debug;
 use colored::{Color, ColoredString, Colorize};
 use crate::player::Player;
@@ -22,8 +22,8 @@ impl BoardCoordinate {
         Self {x, y}
     }
 
-    pub(crate) fn adjacent_coordinates(&self) -> HashMap<CardinalDirection, BoardCoordinate> {
-        HashMap::from([
+    pub(crate) fn adjacent_coordinates(&self) -> BTreeMap<CardinalDirection, BoardCoordinate> {
+        BTreeMap::from([
             (CardinalDirection::North, BoardCoordinate::new(self.x, self.y - 1)),
             (CardinalDirection::East, BoardCoordinate::new(self.x + 1, self.y)),
             (CardinalDirection::South, BoardCoordinate::new(self.x, self.y + 1)),
@@ -32,7 +32,7 @@ impl BoardCoordinate {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TilePlacement {
     pub(crate) coordinate: BoardCoordinate,
     pub(crate) rotations: u8, // count of 90° rotations from the definition (i.e. range is 0-3 inclusive)
@@ -40,7 +40,7 @@ pub struct TilePlacement {
 
 // note that the diagonal corners are intentionally omitted because carcassonne tiles do not form
 // connected regions from touching corners
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub(crate) enum CardinalDirection {
     North,
     NorthNorthEast,
@@ -59,6 +59,25 @@ pub(crate) enum CardinalDirection {
 
     //  NorthWest,
     NorthNorthWest,
+}
+
+impl CardinalDirection {
+    pub(crate) fn opposite(&self) -> Self {
+        match self {
+            CardinalDirection::North => CardinalDirection::South,
+            CardinalDirection::NorthNorthEast => CardinalDirection::SouthSouthWest,
+            CardinalDirection::EastNorthEast => CardinalDirection::WestSouthWest,
+            CardinalDirection::East => CardinalDirection::West,
+            CardinalDirection::EastSouthEast => CardinalDirection::WestNorthWest,
+            CardinalDirection::SouthSouthEast => CardinalDirection::NorthNorthWest,
+            CardinalDirection::South => CardinalDirection::North,
+            CardinalDirection::SouthSouthWest => CardinalDirection::NorthNorthEast,
+            CardinalDirection::WestSouthWest => CardinalDirection::EastNorthEast,
+            CardinalDirection::West => CardinalDirection::East,
+            CardinalDirection::WestNorthWest => CardinalDirection::EastSouthEast,
+            CardinalDirection::NorthNorthWest => CardinalDirection::SouthSouthEast,
+        }
+    }
 }
 
 pub(crate) const PRIMARY_CARDINAL_DIRECTIONS: &[CardinalDirection; 4] = &[
@@ -177,10 +196,11 @@ impl TileDefinition {
     }
 
     pub(crate) fn list_oriented_regions(&self, rotations: u8) -> Vec<RegionType> {
-        let perimeter = self.perimeter_regions().into_iter().cycle();
+        let perimeter = self.perimeter_regions();
 
-        perimeter.skip((rotations * 3) as usize).take(12).collect()
+        perimeter.into_iter().cycle().skip(((4-rotations) * 3) as usize).take(12).collect()
     }
+
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -223,6 +243,20 @@ pub struct PlacedTile {
 }
 
 impl PlacedTile {
+
+    pub(crate) fn list_regions_on_edge(&self, cardinal_direction: &CardinalDirection) -> Vec<RegionType> {
+        let edges = self.tile.list_oriented_regions(self.placement.rotations);
+
+        let skip = match cardinal_direction {
+            CardinalDirection::North => 0,
+            CardinalDirection::East => 3,
+            CardinalDirection::South => 6,
+            CardinalDirection::West => 9,
+            _ => panic!("only primary cardinal directions are supported")
+        };
+
+        edges.into_iter().skip(skip).take(3).collect()
+    }
 
     pub fn render_to_lines(&self /* @todo placed meeple */, render_style: RenderStyle) -> Vec<String> {
         self.tile.render.rotated(self.placement.rotations).enumerate().map(|(row_idx, row)| {
@@ -302,7 +336,7 @@ impl TileRenderRepresentation {
 
 #[cfg(test)]
 mod tests {
-    use crate::tile_definitions::SIDE_CITY_WITH_STRAIGHT_RIVER_AND_BRIDGE;
+    use crate::tile_definitions::{CORNER_ROAD, SIDE_CITY_WITH_STRAIGHT_RIVER_AND_BRIDGE};
     use super::*;
     use super::RegionType::*;
 
@@ -320,6 +354,40 @@ mod tests {
         let perimeter = SIDE_CITY_WITH_STRAIGHT_RIVER_AND_BRIDGE.list_oriented_regions(3);
 
         assert_eq!(perimeter, vec![Field, Water, Field, City, City, City, Field, Water, Field, Field, Road, Field])
+
+    }
+
+
+    #[test]
+    fn test_list_regions_on_edge() {
+
+        let tile = PlacedTile {
+            tile: &SIDE_CITY_WITH_STRAIGHT_RIVER_AND_BRIDGE,
+            placement: TilePlacement {
+                rotations: 0,
+                coordinate: BoardCoordinate::new(0,0)
+            }
+        };
+
+        assert_eq!(tile.list_regions_on_edge(&CardinalDirection::North), vec![City, City, City]);
+        assert_eq!(tile.list_regions_on_edge(&CardinalDirection::East), vec![Field, Water, Field]);
+        assert_eq!(tile.list_regions_on_edge(&CardinalDirection::South), vec![Field, Road, Field]);
+        assert_eq!(tile.list_regions_on_edge(&CardinalDirection::West), vec![Field, Water, Field]);
+
+    }
+
+    #[test]
+    fn test_get_regions_on_edge_rotated() {
+
+        let tile = PlacedTile {
+            tile: &CORNER_ROAD,
+            placement: TilePlacement {
+                rotations: 1,
+                coordinate: BoardCoordinate::new(0,0)
+            }
+        };
+
+        assert_eq!(tile.list_regions_on_edge(&CardinalDirection::South), vec![Field, Road, Field]);
 
     }
 
