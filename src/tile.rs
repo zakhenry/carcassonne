@@ -429,7 +429,18 @@ impl PlacedTile {
                                     " ".on_color(primary_true).to_string()
                                         + &" ".on_color(darken_true).to_string()
                                 } else {
-                                    "  ".on_color(primary_true).to_string()
+                                    match cell {
+                                        RenderCell::Pennant => " ⛨".bold().color(Color::TrueColor {
+                                            r: 0,
+                                            g: 100,
+                                            b: 174,
+                                        }).on_color(Color::TrueColor {
+                                            r: 199,
+                                            g: 147,
+                                            b: 88,
+                                        }).to_string(),
+                                        _ => "  ".on_color(primary_true).to_string()
+                                    }
                                 }
                             }
                         }
