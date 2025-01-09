@@ -13,9 +13,9 @@ mod board;
 mod deck;
 mod game_logic;
 mod player;
-mod regions;
 mod tile;
 mod tile_definitions;
+mod connected_regions;
 
 fn main() {
     let rng = Rc::new(RefCell::new(StdRng::from_entropy()));
@@ -52,7 +52,7 @@ fn main() {
 
             // println!("{}", tile.render_to_lines(RenderStyle::TrueColor).join("\n"));
 
-            board.write().unwrap().place_tile(tile)
+            board.write().unwrap().place_tile(tile).unwrap();
         } else {
             eprintln!("no move hints?")
         }

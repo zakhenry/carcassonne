@@ -1,13 +1,14 @@
 use std::cmp::PartialEq;
-use crate::player::Player;
+use crate::player::{Player, RegionIndex};
 use colored::{Color, ColoredString, Colorize};
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::Debug;
-use crate::tile_definitions::RIVER_TERMINATOR;
+use crate::connected_regions::PlacedTileRegion;
+use crate::tile_definitions::{CLOISTER_IN_FIELD, RIVER_TERMINATOR};
 
 pub const TILE_WIDTH: usize = 7;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub(crate) struct TileCoordinate {
     pub(crate) x: u8,
     pub(crate) y: u8,
@@ -165,7 +166,7 @@ pub(crate) enum Region {
 }
 
 impl Region {
-    fn edges(&self) -> &'static [CardinalDirection] {
+    pub(crate) fn edges(&self) -> &'static [CardinalDirection] {
         match self {
             Region::City { edges, .. } => edges,
             Region::Field { edges, .. } => edges,
@@ -176,7 +177,7 @@ impl Region {
     }
 
     // @todo the existence of the two enums is a code smell. Some refactoring is needed!
-    fn region_type(&self) -> RegionType {
+    pub(crate) fn region_type(&self) -> RegionType {
         match self {
             Region::City { .. } => RegionType::City,
             Region::Field { .. } => RegionType::Field,
@@ -342,7 +343,7 @@ pub enum RenderStyle {
     // image??
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PlacedTile {
     pub(crate) tile: &'static TileDefinition,
     pub(crate) placement: TilePlacement,
@@ -352,6 +353,9 @@ pub struct PlacedTile {
 
 impl PlacedTile {
 
+    pub(crate) fn new(tile: &'static TileDefinition, x: i8, y: i8, rotations: u8) -> Self {
+        PlacedTile { tile, placement: TilePlacement { coordinate: BoardCoordinate { x, y }, rotations } }
+    }
 
     pub(crate) fn get_opposite_river_end_direction(&self, direction: CardinalDirection) -> Option<CardinalDirection> {
 
@@ -382,6 +386,14 @@ impl PlacedTile {
         };
 
         edges.into_iter().skip(skip).take(3).collect()
+    }
+
+    pub(crate) fn list_placed_tile_regions(&self) -> Vec<PlacedTileRegion> {
+
+        (0..self.tile.regions.len()).map(|idx|{
+            PlacedTileRegion::new(self, RegionIndex::new(idx))
+        }).collect()
+
     }
 
     pub fn render_to_lines(

@@ -1,3 +1,4 @@
+use std::ops::Deref;
 use crate::tile::PlacedTile;
 use uuid::Uuid;
 
@@ -51,8 +52,22 @@ impl Player {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, Eq, Hash, PartialEq)]
 pub(crate) struct RegionIndex(usize);
+
+impl RegionIndex {
+    pub(crate) fn new(v: usize) -> Self {
+        Self(v)
+    }
+}
+
+impl Deref for RegionIndex {
+    type Target = usize;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 #[derive(Debug)]
 struct MeepleLocation {

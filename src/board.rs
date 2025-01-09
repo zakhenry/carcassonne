@@ -1,11 +1,13 @@
+use std::cell::RefCell;
 use crate::player::{Meeple, Player, RegionIndex};
-use crate::regions::{ConnectedRegion, UniqueTileRegion};
 use crate::tile::{
     BoardCoordinate, CardinalDirection, PlacedTile, RegionType, RenderStyle, TileDefinition,
     TilePlacement, TILE_WIDTH,
 };
 use std::collections::{HashMap, HashSet};
+use std::rc::Rc;
 use indexmap::IndexMap;
+use crate::connected_regions::{ConnectedRegion, ConnectedRegionReference, PlacedTileEdge, PlacedTileRegion};
 use crate::tile_definitions::RIVER_TERMINATOR;
 // private val regionIndex: MutableMap<UniqueTileRegion, ConnectedRegion> = mutableMapOf(),
 // private val scoreRecord: MutableList<Map<Player, Int>> = mutableListOf(),
@@ -23,7 +25,8 @@ struct RegionScore {
 pub struct Board {
     players: Vec<Player>,
     placed_tiles: IndexMap<BoardCoordinate, PlacedTile>,
-    region_index: HashMap<UniqueTileRegion, ConnectedRegion>,
+    connected_regions: Vec<ConnectedRegionReference>,
+    region_index: HashMap<PlacedTileEdge, ConnectedRegionReference>,
     score_record: Vec<HashMap<Player, u32>>,
     placed_meeple: HashMap<PlacedTile, Meeple>,
     liberated_meeple: HashMap<PlacedTile, Meeple>,
@@ -36,6 +39,8 @@ pub(crate) struct MoveHint {
     // @todo score
 }
 
+
+#[derive(Debug)]
 pub enum InvalidTilePlacement {
     TileAlreadyAtCoordinate,
     TileDoesNotContactPlacedTiles,
@@ -43,6 +48,13 @@ pub enum InvalidTilePlacement {
     OtherMeepleAlreadyInConnectedRegion,
     RiverMustBeConnected,
     RiverMustNotImmediatelyTurnOnItself,
+}
+
+#[derive(Debug, Default)]
+pub struct TilePlacementSuccess {
+    score_delta: HashMap<Player, u32>,
+    placed_meeple: Option<Meeple>,
+    liberated_meeple: Vec<Meeple>
 }
 
 impl Board {
@@ -84,24 +96,48 @@ impl Board {
         }
     }
 
-    pub(crate) fn new_with_tiles(players: Vec<Player>, tiles: Vec<PlacedTile>) -> Self {
-        Self {
-            players,
-            placed_tiles: IndexMap::from_iter(
-                tiles
-                    .into_iter()
-                    .map(|t| (t.placement.coordinate.clone(), t)),
-            ),
-            ..Default::default()
+    pub(crate) fn new_with_tiles(players: Vec<Player>, tiles: Vec<PlacedTile>) -> Result<Self, InvalidTilePlacement> {
+
+        let mut board = Board::new(players);
+
+        for tile in tiles {
+            board.place_tile(tile)?;
         }
+
+        Ok(board)
     }
 
     pub fn placed_tile_count(&self) -> usize {
         self.placed_tiles.len()
     }
 
-    pub(crate) fn place_tile(&mut self, tile: PlacedTile) {
+    pub(crate) fn place_tile(&mut self, tile: PlacedTile) -> Result<TilePlacementSuccess, InvalidTilePlacement> {
+        self.validate_tile_placement(tile.tile, &tile.placement)?;
+
+        let tile_connected_regions = ConnectedRegion::from_tile(&tile);
+
+        for connected_region in tile_connected_regions {
+
+            // for region in &connected_region.tile_regions {
+            //     for edge in region.region.edges() {
+            //
+            //     }
+            // }
+
+            let connected_region_ref = Rc::new(RefCell::new(connected_region));
+
+            for placed_tile_edge in connected_region_ref.borrow().placed_tile_edges() {
+                self.region_index.insert(placed_tile_edge, connected_region_ref.clone());
+            }
+
+            self.connected_regions.push(connected_region_ref);
+
+        }
+
         self.placed_tiles.insert(tile.placement.coordinate, tile);
+
+        // @todo implement scoring and meeple tracking in success result
+        Ok(TilePlacementSuccess::default())
     }
 
     fn possible_next_tile_coordinates(&self) -> HashSet<BoardCoordinate> {
@@ -230,6 +266,10 @@ impl Board {
             .collect()
     }
 
+    pub(crate) fn get_connected_regions(&self) -> &Vec<ConnectedRegionReference> {
+        &self.connected_regions
+    }
+
     pub(crate) fn render(&self) -> String {
         if self.placed_tiles.is_empty() {
             return "[Empty board]".to_string();
@@ -306,7 +346,7 @@ mod tests {
                     rotations: 0,
                 },
             }],
-        );
+        ).unwrap();
 
         let res = board.validate_tile_placement(
             &STRAIGHT_ROAD,
@@ -333,7 +373,7 @@ mod tests {
                     rotations: 0,
                 },
             }],
-        );
+        ).unwrap();
 
         let res = board.validate_tile_placement(
             &STRAIGHT_ROAD,
@@ -376,7 +416,7 @@ mod tests {
                     },
                 },
             ],
-        );
+        ).unwrap();
 
         // println!("{}", board.render());
 
@@ -428,7 +468,7 @@ mod tests {
                     },
                 },
             ],
-        );
+        ).unwrap();
 
         let res = board.validate_tile_placement(
             &STRAIGHT_ROAD,
@@ -458,7 +498,7 @@ mod tests {
                     },
                 },
             ],
-        );
+        ).unwrap();
 
         let res = board.validate_tile_placement(
             &STRAIGHT_RIVER,
@@ -486,7 +526,7 @@ mod tests {
                     },
                 },
             ],
-        );
+        ).unwrap();
 
         let res = board.validate_tile_placement(
             &CORNER_RIVER,
