@@ -7,7 +7,7 @@ use crate::tile::{
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use indexmap::IndexMap;
-use crate::connected_regions::{ConnectedRegion, ConnectedRegionReference, PlacedTileEdge, PlacedTileRegion};
+use crate::connected_regions::{ConnectedRegion, ConnectedRegionId, PlacedTileEdge, PlacedTileRegion};
 use crate::tile_definitions::RIVER_TERMINATOR;
 // private val regionIndex: MutableMap<UniqueTileRegion, ConnectedRegion> = mutableMapOf(),
 // private val scoreRecord: MutableList<Map<Player, Int>> = mutableListOf(),
@@ -25,8 +25,8 @@ struct RegionScore {
 pub struct Board {
     players: Vec<Player>,
     placed_tiles: IndexMap<BoardCoordinate, PlacedTile>,
-    connected_regions: Vec<ConnectedRegionReference>,
-    region_index: HashMap<PlacedTileEdge, ConnectedRegionReference>,
+    connected_regions: HashMap<ConnectedRegionId, ConnectedRegion>,
+    region_index: HashMap<PlacedTileEdge, ConnectedRegionId>,
     score_record: Vec<HashMap<Player, u32>>,
     placed_meeple: HashMap<PlacedTile, Meeple>,
     liberated_meeple: HashMap<PlacedTile, Meeple>,
@@ -70,7 +70,7 @@ impl Board {
             (0..4)
                 .into_iter()
                 .filter(move |&rotations| {
-                    let region_sequence = tile.list_oriented_regions(rotations);
+                    let region_sequence = tile.list_oriented_region_types(rotations);
 
                     region_sequences.insert(region_sequence)
                 })
@@ -116,21 +116,32 @@ impl Board {
 
         let tile_connected_regions = ConnectedRegion::from_tile(&tile);
 
-        for connected_region in tile_connected_regions {
+        'outer: for connected_region in tile_connected_regions {
 
-            // for region in &connected_region.tile_regions {
-            //     for edge in region.region.edges() {
-            //
-            //     }
-            // }
+            let placed_tile_edges_for_tile = &connected_region.placed_tile_edges_for_tile(&tile);
 
-            let connected_region_ref = Rc::new(RefCell::new(connected_region));
+            for placed_tile_edge in placed_tile_edges_for_tile {
+                let opposite = placed_tile_edge.opposing_tile_edge();
 
-            for placed_tile_edge in connected_region_ref.borrow().placed_tile_edges() {
-                self.region_index.insert(placed_tile_edge, connected_region_ref.clone());
+                if let Some(connected_region_id) = self.region_index.get(&opposite) {
+                    let mut region_to_merge = self.connected_regions.get_mut(connected_region_id).expect("should exist");
+
+                    let merged = region_to_merge.merge_mut(connected_region).expect("TODO: panic message");
+
+                    for placed_tile_edge in placed_tile_edges_for_tile {
+                        self.region_index.insert(placed_tile_edge.clone(), merged.id);
+                    }
+
+                    // @todo validate if this short circuit is acceptable
+                    continue 'outer;
+                }
             }
 
-            self.connected_regions.push(connected_region_ref);
+            for placed_tile_edge in placed_tile_edges_for_tile {
+                self.region_index.insert(placed_tile_edge.clone(), connected_region.id);
+            }
+
+            self.connected_regions.insert(connected_region.id, connected_region);
 
         }
 
@@ -138,6 +149,10 @@ impl Board {
 
         // @todo implement scoring and meeple tracking in success result
         Ok(TilePlacementSuccess::default())
+    }
+
+    fn opposing_tile_edge(&self, edge: &PlacedTileEdge) -> Option<PlacedTileEdge> {
+        todo!()
     }
 
     fn possible_next_tile_coordinates(&self) -> HashSet<BoardCoordinate> {
@@ -187,7 +202,7 @@ impl Board {
 
         let candidate_placed_tile = PlacedTile { tile, placement: placement.clone() };
 
-        let own_regions = tile.list_oriented_regions(placement.rotations);
+        let own_regions = tile.list_oriented_region_types(placement.rotations);
 
         let region_pairings: Vec<_> = own_regions
             .iter()
@@ -220,7 +235,7 @@ impl Board {
 
 
                 let current_heading = candidate_placed_tile.get_opposite_river_end_direction(direction_to_prev);
-                let previous_source = prev_tile.get_opposite_river_end_direction(direction_to_prev.opposite());
+                let previous_source = prev_tile.get_opposite_river_end_direction(direction_to_prev.compass_opposite());
 
                 if previous_source == current_heading {
                     return Err(InvalidTilePlacement::RiverMustNotImmediatelyTurnOnItself);
@@ -255,7 +270,7 @@ impl Board {
             .flat_map(|(direction, tile)| {
                 if let Some(adjacent_tile) = tile {
                     adjacent_tile
-                        .list_regions_on_edge(&direction.opposite())
+                        .list_regions_on_edge(&direction.compass_opposite())
                         .iter()
                         .map(|region_type| Some(region_type.clone()))
                         .collect()
@@ -266,8 +281,8 @@ impl Board {
             .collect()
     }
 
-    pub(crate) fn get_connected_regions(&self) -> &Vec<ConnectedRegionReference> {
-        &self.connected_regions
+    pub(crate) fn get_connected_regions(&self) -> Vec<&ConnectedRegion> {
+        self.connected_regions.values().collect()
     }
 
     pub(crate) fn render(&self) -> String {

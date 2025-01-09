@@ -3,7 +3,7 @@ use crate::player::{Player, RegionIndex};
 use colored::{Color, ColoredString, Colorize};
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::Debug;
-use crate::connected_regions::PlacedTileRegion;
+use crate::connected_regions::{ConnectedRegion, PlacedTileEdge, PlacedTileRegion};
 use crate::tile_definitions::{CLOISTER_IN_FIELD, RIVER_TERMINATOR};
 
 pub const TILE_WIDTH: usize = 7;
@@ -36,25 +36,17 @@ impl BoardCoordinate {
         }
     }
 
+    pub(crate) fn adjacent_in_direction(&self, direction: &CardinalDirection) -> BoardCoordinate {
+        match direction {
+            CardinalDirection::North | CardinalDirection::NorthNorthEast | CardinalDirection::NorthNorthWest => BoardCoordinate::new(self.x, self.y - 1),
+            CardinalDirection::EastNorthEast | CardinalDirection::East | CardinalDirection::EastSouthEast => BoardCoordinate::new(self.x + 1, self.y),
+            CardinalDirection::SouthSouthEast | CardinalDirection::South  | CardinalDirection::SouthSouthWest => BoardCoordinate::new(self.x, self.y + 1),
+            CardinalDirection::WestSouthWest | CardinalDirection::West | CardinalDirection::WestNorthWest => BoardCoordinate::new(self.x - 1, self.y),
+        }
+    }
+
     pub(crate) fn adjacent_coordinates(&self) -> BTreeMap<CardinalDirection, BoardCoordinate> {
-        BTreeMap::from([
-            (
-                CardinalDirection::North,
-                BoardCoordinate::new(self.x, self.y - 1),
-            ),
-            (
-                CardinalDirection::East,
-                BoardCoordinate::new(self.x + 1, self.y),
-            ),
-            (
-                CardinalDirection::South,
-                BoardCoordinate::new(self.x, self.y + 1),
-            ),
-            (
-                CardinalDirection::West,
-                BoardCoordinate::new(self.x - 1, self.y),
-            ),
-        ])
+        BTreeMap::from_iter(PRIMARY_CARDINAL_DIRECTIONS.iter().map(|d|(d.clone(), self.adjacent_in_direction(d))))
     }
 }
 
@@ -93,7 +85,7 @@ impl CardinalDirection {
         PERIMETER_REGION_DIRECTIONS.iter().cycle().skip(n * 3 + PERIMETER_REGION_DIRECTIONS.iter().position(|d|d == self).expect("should exist")).take(1).next().expect("should have a field").clone()
     }
 
-    pub(crate) fn opposite(&self) -> Self {
+    pub(crate) fn compass_opposite(&self) -> Self {
         match self {
             CardinalDirection::North => CardinalDirection::South,
             CardinalDirection::NorthNorthEast => CardinalDirection::SouthSouthWest,
@@ -107,6 +99,40 @@ impl CardinalDirection {
             CardinalDirection::West => CardinalDirection::East,
             CardinalDirection::WestNorthWest => CardinalDirection::EastSouthEast,
             CardinalDirection::NorthNorthWest => CardinalDirection::SouthSouthEast,
+        }
+    }
+
+    pub(crate) fn tile_opposite(&self) -> Self {
+        match self {
+            CardinalDirection::North => CardinalDirection::South,
+            CardinalDirection::NorthNorthEast => CardinalDirection::SouthSouthEast,
+            CardinalDirection::EastNorthEast => CardinalDirection::WestNorthWest,
+            CardinalDirection::East => CardinalDirection::West,
+            CardinalDirection::EastSouthEast => CardinalDirection::WestSouthWest,
+            CardinalDirection::SouthSouthEast => CardinalDirection::NorthNorthEast,
+            CardinalDirection::South => CardinalDirection::North,
+            CardinalDirection::SouthSouthWest => CardinalDirection::NorthNorthWest,
+            CardinalDirection::WestSouthWest => CardinalDirection::EastSouthEast,
+            CardinalDirection::West => CardinalDirection::East,
+            CardinalDirection::WestNorthWest => CardinalDirection::EastNorthEast,
+            CardinalDirection::NorthNorthWest => CardinalDirection::SouthSouthWest,
+        }
+    }
+
+    pub(crate) fn primary_direction(&self) -> Self {
+        match self {
+            CardinalDirection::North => CardinalDirection::North,
+            CardinalDirection::NorthNorthEast => CardinalDirection::North,
+            CardinalDirection::EastNorthEast => CardinalDirection::East,
+            CardinalDirection::East => CardinalDirection::East,
+            CardinalDirection::EastSouthEast => CardinalDirection::East,
+            CardinalDirection::SouthSouthEast => CardinalDirection::South,
+            CardinalDirection::South => CardinalDirection::South,
+            CardinalDirection::SouthSouthWest => CardinalDirection::South,
+            CardinalDirection::WestSouthWest => CardinalDirection::West,
+            CardinalDirection::West => CardinalDirection::West,
+            CardinalDirection::WestNorthWest => CardinalDirection::West,
+            CardinalDirection::NorthNorthWest => CardinalDirection::North,
         }
     }
 }
@@ -133,7 +159,7 @@ pub(crate) const PERIMETER_REGION_DIRECTIONS: &[CardinalDirection; 12] = &[
     CardinalDirection::WestNorthWest,
 ];
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub(crate) enum RegionType {
     City,
     Field,
@@ -227,7 +253,7 @@ impl TileDefinition {
             .collect()
     }
 
-    pub(crate) fn list_oriented_regions(&self, rotations: u8) -> Vec<RegionType> {
+    pub(crate) fn list_oriented_region_types(&self, rotations: u8) -> Vec<RegionType> {
         let perimeter = self.perimeter_regions();
 
         perimeter
@@ -349,8 +375,6 @@ pub struct PlacedTile {
     pub(crate) placement: TilePlacement,
 }
 
-
-
 impl PlacedTile {
 
     pub(crate) fn new(tile: &'static TileDefinition, x: i8, y: i8, rotations: u8) -> Self {
@@ -375,7 +399,7 @@ impl PlacedTile {
         &self,
         cardinal_direction: &CardinalDirection,
     ) -> Vec<RegionType> {
-        let edges = self.tile.list_oriented_regions(self.placement.rotations);
+        let edges = self.tile.list_oriented_region_types(self.placement.rotations);
 
         let skip = match cardinal_direction {
             CardinalDirection::North => 0,
@@ -503,7 +527,7 @@ mod tests {
     }
     #[test]
     fn test_oriented_regions_returns_expected_result() {
-        let perimeter = SIDE_CITY_WITH_STRAIGHT_RIVER_AND_BRIDGE.list_oriented_regions(3);
+        let perimeter = SIDE_CITY_WITH_STRAIGHT_RIVER_AND_BRIDGE.list_oriented_region_types(3);
 
         assert_eq!(
             perimeter,
@@ -574,7 +598,7 @@ mod tests {
     fn test_rotate_cardinal_direction() {
         assert_eq!(CardinalDirection::North.rotate(0), CardinalDirection::North);
         assert_eq!(CardinalDirection::North.rotate(1), CardinalDirection::East);
-        assert_eq!(CardinalDirection::NorthNorthWest.rotate(2), CardinalDirection::NorthNorthWest.opposite());
+        assert_eq!(CardinalDirection::NorthNorthWest.rotate(2), CardinalDirection::NorthNorthWest.compass_opposite());
     }
 
 }
