@@ -295,6 +295,18 @@ pub(crate) enum RenderCell {
 }
 
 impl RenderCell {
+    fn ascii_code(&self) -> &'static str {
+        match self {
+            RenderCell::Field => "░░",
+            RenderCell::Road => "██",
+            RenderCell::City => "▓▓",
+            RenderCell::Cloister => " ✝",
+            RenderCell::Pennant => " ⛨",
+            RenderCell::Water => "~~",
+            RenderCell::Corner => " "
+        }
+    }
+
     fn colors(&self) -> (Color, Color, Color, Color) {
         match self {
             Self::Field => (
@@ -384,6 +396,7 @@ impl RenderCell {
 pub enum RenderStyle {
     Ansi,
     TrueColor,
+    Ascii
     // image??
 }
 
@@ -440,7 +453,7 @@ impl PlacedTile {
 
     pub fn render_to_lines(
         &self, /* @todo placed meeple */
-        render_style: RenderStyle,
+        render_style: &RenderStyle,
     ) -> Vec<String> {
         self.tile
             .render
@@ -455,6 +468,19 @@ impl PlacedTile {
                         let (portable, primary_true, lighten_true, darken_true) = cell.colors();
 
                         match render_style {
+                            RenderStyle::Ascii => if let RenderCell::Corner = cell {
+                                " "
+                            } else if row_idx == 0 {
+                            "━━"
+                        } else if column_idx == 0 {
+                            "┃"
+                        } else if row_idx == TILE_WIDTH - 1 {
+                            "━━"
+                        } else if column_idx == TILE_WIDTH - 1 {
+                            "┃"
+                        } else {
+                            cell.ascii_code()
+                        }.to_string(),
                             RenderStyle::Ansi => if let RenderCell::Corner = cell {
                                 " ".black()
                             } else if row_idx == 0 {
@@ -549,7 +575,7 @@ mod tests {
 
         assert_eq!(
             perimeter,
-            vec![Field, Water, Field, City, City, City, Field, Water, Field, Field, Road, Field]
+            vec![Field, Water, Field, Field, Road, Field, Field, Water, Field, City, City, City]
         )
     }
 

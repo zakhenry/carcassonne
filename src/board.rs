@@ -116,34 +116,30 @@ impl Board {
 
         let tile_connected_regions = ConnectedRegion::from_tile(&tile);
 
-        'outer: for connected_region in tile_connected_regions {
+        for mut connected_region in tile_connected_regions {
+            let mut regions_to_merge: HashSet<ConnectedRegionId> = Default::default();
 
-            let placed_tile_edges_for_tile = &connected_region.placed_tile_edges_for_tile(&tile);
-
-            for placed_tile_edge in placed_tile_edges_for_tile {
-                let opposite = placed_tile_edge.opposing_tile_edge();
-
+            for edge in connected_region.connected_edges.keys() {
+                let opposite = edge.opposing_tile_edge();
                 if let Some(connected_region_id) = self.region_index.get(&opposite) {
-                    let mut region_to_merge = self.connected_regions.get_mut(connected_region_id).expect("should exist");
-
-                    let merged = region_to_merge.merge_mut(connected_region).expect("TODO: panic message");
-
-                    for placed_tile_edge in placed_tile_edges_for_tile {
-                        self.region_index.insert(placed_tile_edge.clone(), merged.id);
-                    }
-
-                    // @todo validate if this short circuit is acceptable
-                    continue 'outer;
+                    regions_to_merge.insert(connected_region_id.clone());
                 }
             }
 
-            for placed_tile_edge in placed_tile_edges_for_tile {
+            for region_id in regions_to_merge {
+                let merge_region = self.connected_regions.remove(&region_id).expect("should exist");
+
+                connected_region.merge_mut(merge_region).expect("should merge");
+            }
+
+            for placed_tile_edge in connected_region.connected_edges.keys() {
                 self.region_index.insert(placed_tile_edge.clone(), connected_region.id);
             }
 
             self.connected_regions.insert(connected_region.id, connected_region);
 
         }
+
 
         self.placed_tiles.insert(tile.placement.coordinate, tile);
 
@@ -285,7 +281,7 @@ impl Board {
         self.connected_regions.values().collect()
     }
 
-    pub(crate) fn render(&self) -> String {
+    pub(crate) fn render(&self, style: RenderStyle) -> String {
         if self.placed_tiles.is_empty() {
             return "[Empty board]".to_string();
         }
@@ -312,7 +308,7 @@ impl Board {
                 let coord = BoardCoordinate { x: column, y: row };
 
                 let lines = if let Some(tile) = self.placed_tiles.get(&coord) {
-                    tile.render_to_lines(RenderStyle::TrueColor)
+                    tile.render_to_lines(&style)
                 } else {
                     vec![std::iter::repeat(' ').take(TILE_WIDTH * 2).collect(); TILE_WIDTH]
                 };

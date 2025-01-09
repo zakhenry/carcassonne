@@ -63,5 +63,7 @@ fn main() {
         board.read().unwrap().placed_tile_count()
     );
 
-    println!("{}", board.read().unwrap().render())
+    println!("{}", board.read().unwrap().render(RenderStyle::TrueColor));
+
+    println!("{:?}", board.read().unwrap().get_connected_regions())
 }

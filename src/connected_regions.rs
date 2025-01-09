@@ -1,7 +1,7 @@
 // data class UniqueTileRegion(val tileId: UUID, val regionIndex: Int, val region: Region, val edgeless: Boolean)
 
 use std::cell::RefCell;
-use crate::player::{Meeple, RegionIndex};
+use crate::player::{Meeple, PlayerId, RegionIndex};
 use crate::tile::{BoardCoordinate, CardinalDirection, PlacedTile, Region, RegionType, TileCoordinate};
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
@@ -55,7 +55,8 @@ pub(crate) struct ConnectedRegion {
     region_type: RegionType,
     pub(crate) tile_regions: Vec<PlacedTileRegion>,
     residents: HashSet<Rc<Meeple>>,
-    pub(crate) adjacent_regions: HashSet<ConnectedRegionId>
+    pub(crate) adjacent_regions: HashSet<ConnectedRegionId>,
+    pub(crate) connected_edges: HashMap<PlacedTileEdge, Option<PlacedTileEdge>>
 }
 
 #[derive(Debug)]
@@ -71,13 +72,20 @@ impl ConnectedRegion {
 
         let mut connected_regions: Vec<_> = regions.into_iter().map(|region| {
 
+            let connected_edges: HashMap<PlacedTileEdge, Option<PlacedTileEdge>> = region.region.edges().iter().map(|edge| (PlacedTileEdge {
+                global_direction: edge.rotate(tile.placement.rotations as usize),
+                coordinate: tile.placement.coordinate,
+            }, None)).collect();
+
             Self {
                 region_type: region.region.region_type(),
                 tile_regions: Vec::from([region]),
                 residents: Default::default(), // @todo link meeple
                 id: Uuid::new_v4(),
                 adjacent_regions: Default::default(),
+                connected_edges
             }
+
         }).collect();
 
         let edge_index: HashMap<CardinalDirection, ConnectedRegionId> = connected_regions.iter().flat_map(|connected_region| {
@@ -101,14 +109,6 @@ impl ConnectedRegion {
         connected_regions
     }
 
-    pub(crate) fn placed_tile_edges_for_tile(&self, tile: &PlacedTile) -> Vec<PlacedTileEdge> {
-        self.tile_regions.iter().filter(|&region| region.tile_position == tile.placement.coordinate).flat_map(|tile_region| tile_region.region.edges().iter().map(|edge| PlacedTileEdge {
-            global_direction: edge.rotate(tile.placement.rotations as usize),
-            coordinate: tile.placement.coordinate,
-        }
-        )).collect()
-    }
-
     pub(crate) fn merge_mut(&mut self, other: Self) -> Result<&mut Self, ConnectedRegionMergeFailure> {
         if self.region_type != other.region_type {
             return Err(ConnectedRegionMergeFailure::RegionTypeMismatch);
@@ -117,7 +117,27 @@ impl ConnectedRegion {
         self.tile_regions.extend(other.tile_regions);
         self.adjacent_regions.extend(other.adjacent_regions);
 
+        for (own_edge, foreign_edge) in other.connected_edges {
+
+            let opposite = own_edge.opposing_tile_edge();
+
+            if self.connected_edges.contains_key(&opposite) {
+                self.connected_edges.insert(opposite, Some(own_edge));
+            } else {
+                self.connected_edges.insert(own_edge, foreign_edge);
+            }
+
+        }
+
         Ok(self)
+    }
+
+    pub(crate) fn is_closed(&self) -> bool {
+        self.connected_edges.values().all(|e|e.is_some())
+    }
+
+    pub(crate) fn score(&self) -> HashMap<PlayerId, u32> {
+        todo!()
     }
 }
 
@@ -149,8 +169,8 @@ mod tests {
     use crate::board::Board;
     use crate::player::{Player, RegionIndex};
     use crate::tile::RegionType::{Cloister, Field, Road, City};
-    use crate::tile::{BoardCoordinate, PlacedTile, RegionType};
-    use crate::tile_definitions::{CLOISTER_IN_FIELD, CORNER_ROAD, STRAIGHT_ROAD, THREE_SIDED_CITY};
+    use crate::tile::{BoardCoordinate, PlacedTile, RegionType, RenderStyle};
+    use crate::tile_definitions::{CLOISTER_IN_FIELD, CORNER_ROAD, CROSS_INTERSECTION, STRAIGHT_ROAD, THREE_SIDED_CITY};
     use std::collections::HashSet;
     use uuid::Uuid;
     use crate::connected_regions::{ConnectedRegion, ConnectedRegionCollection, ConnectedRegionMergeFailure, PlacedTileEdge, PlacedTileRegion};
@@ -199,6 +219,7 @@ mod tests {
             residents: Default::default(),
             id: Uuid::new_v4(),
             adjacent_regions: Default::default(),
+            connected_edges: Default::default(),
         };
 
         let merge_result = test_region.merge_mut(ConnectedRegion {
@@ -207,6 +228,7 @@ mod tests {
             residents: Default::default(),
             id: Uuid::new_v4(),
             adjacent_regions: Default::default(),
+            connected_edges: Default::default(),
         });
 
         assert!(matches!(merge_result, Err(ConnectedRegionMergeFailure::RegionTypeMismatch)))
@@ -242,11 +264,18 @@ mod tests {
         assert_eq!(merge_result.tile_regions.len(), 4)
     }
 
-    fn assert_connected_regions(placed_tiles: &[PlacedTile], expectation: &[RegionType]) -> () {
+    fn assert_connected_regions(placed_tiles: &[PlacedTile], expectation: &[(RegionType, bool)]) -> () {
         let board = Board::new_with_tiles(vec![Player::red(), Player::green()], placed_tiles.to_vec()).unwrap();
 
+        println!("{}",board.render(RenderStyle::Ascii));
+
         let connected_regions = board.get_connected_regions();
-        let mut region_types: Vec<_> = connected_regions.into_iter().map(|r| r.region_type.clone()).collect();
+
+        // for region in &connected_regions {
+        //     println!("{:?} {}", region.region_type, region.is_closed());
+        // }
+
+        let mut region_types: Vec<_> = connected_regions.into_iter().map(|r| (r.region_type.clone(), r.is_closed())).collect();
 
         let mut test = Vec::from_iter(expectation.iter().cloned());
 
@@ -264,7 +293,7 @@ mod tests {
                 PlacedTile::new(&CLOISTER_IN_FIELD, 1, 0, 0),
                 PlacedTile::new(&CLOISTER_IN_FIELD, 1, 1, 0),
             ],
-            &[Cloister, Cloister, Cloister, Field],
+            &[(Cloister, true), (Cloister, true), (Cloister, true), (Field, false)],
         )
     }
 
@@ -275,7 +304,7 @@ mod tests {
                 PlacedTile::new(&STRAIGHT_ROAD, 0, 0, 0),
                 PlacedTile::new(&STRAIGHT_ROAD, 0, 1, 0),
             ],
-            &[Field, Field, Road],
+            &[(Field, false), (Field, false), (Road, false)],
         )
     }
 
@@ -293,7 +322,24 @@ mod tests {
                 PlacedTile::new(&STRAIGHT_ROAD, 0, 1, 1),
                 PlacedTile::new(&CLOISTER_IN_FIELD, 0, 0, 0),
             ],
-            &[Cloister, Field, Field, Road],
+            &[(Cloister, true), (Field, true), (Field, false), (Road, true)],
+        )
+    }
+
+    #[test]
+    fn should_multi_merge_regions() {
+        assert_connected_regions(
+            &[
+                PlacedTile::new(&CORNER_ROAD, -1, -1, 0),
+                PlacedTile::new(&CROSS_INTERSECTION, -1, 0, 0),
+                PlacedTile::new(&CORNER_ROAD, -1, 1, 3),
+                PlacedTile::new(&STRAIGHT_ROAD, 0, -1, 1),
+                PlacedTile::new(&CORNER_ROAD, 1, -1, 1),
+                PlacedTile::new(&STRAIGHT_ROAD, 1, 0, 0),
+                PlacedTile::new(&CORNER_ROAD, 1, 1, 2),
+                PlacedTile::new(&STRAIGHT_ROAD, 0, 1, 1),
+            ],
+            &[(Field, false), (Field, false),( Road, false),( Road, false), (Road, true)],
         )
     }
 }

@@ -11,11 +11,13 @@ enum PlayerColor {
     Black,
 }
 
+pub type PlayerId = Uuid;
+
 const MEEPLE_COUNT: usize = 7;
 
 #[derive(Debug)]
 pub struct Player {
-    id: Uuid,
+    id: PlayerId,
     color: PlayerColor,
     name: Option<String>,
     meeple: Vec<Meeple>,
@@ -26,7 +28,7 @@ impl Player {
         let meeple = Vec::with_capacity(MEEPLE_COUNT);
 
         let mut player = Self {
-            id: Uuid::new_v4(),
+            id: PlayerId::new_v4(),
             name: None,
             color,
             meeple,
@@ -78,7 +80,7 @@ struct MeepleLocation {
 #[derive(Debug)]
 pub struct Meeple {
     id: Uuid,
-    player_id: Uuid,
+    player_id: PlayerId,
     location: Option<MeepleLocation>,
 }
 
