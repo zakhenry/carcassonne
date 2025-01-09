@@ -79,10 +79,28 @@ pub(crate) enum CardinalDirection {
     NorthNorthWest,
 }
 
+// @todo the methods here are jank or verbose, and there are almost certainly better approaches.
 impl CardinalDirection {
 
     pub (crate) fn rotate(&self, n: usize) -> Self {
         PERIMETER_REGION_DIRECTIONS.iter().cycle().skip(n * 3 + PERIMETER_REGION_DIRECTIONS.iter().position(|d|d == self).expect("should exist")).take(1).next().expect("should have a field").clone()
+    }
+
+    pub (crate) fn adjacent(&self) -> (Self, Self) {
+        match self {
+            Self::North => (Self::NorthNorthWest, Self::NorthNorthEast),
+            Self::NorthNorthEast => (Self::North, Self::EastNorthEast),
+            Self::EastNorthEast => (Self::NorthNorthEast, Self::East),
+            Self::East => (Self::EastNorthEast, Self::EastSouthEast),
+            Self::EastSouthEast => (Self::East, Self::SouthSouthEast),
+            Self::SouthSouthEast => (Self::EastSouthEast, Self::South),
+            Self::South => (Self::SouthSouthEast, Self::SouthSouthWest),
+            Self::SouthSouthWest => (Self::South, Self::WestSouthWest),
+            Self::WestSouthWest => (Self::SouthSouthWest, Self::West),
+            Self::West => (Self::WestSouthWest, Self::WestNorthWest),
+            Self::WestNorthWest => (Self::West, Self::NorthNorthWest),
+            Self::NorthNorthWest => (Self::WestNorthWest, Self::North),
+        }
     }
 
     pub(crate) fn compass_opposite(&self) -> Self {
@@ -599,6 +617,12 @@ mod tests {
         assert_eq!(CardinalDirection::North.rotate(0), CardinalDirection::North);
         assert_eq!(CardinalDirection::North.rotate(1), CardinalDirection::East);
         assert_eq!(CardinalDirection::NorthNorthWest.rotate(2), CardinalDirection::NorthNorthWest.compass_opposite());
+    }
+
+    #[test]
+    fn test_adjacent_cardinal_direction() {
+        assert_eq!(CardinalDirection::North.adjacent(), (CardinalDirection::NorthNorthWest, CardinalDirection::NorthNorthEast));
+        assert_eq!(CardinalDirection::EastSouthEast.adjacent(), (CardinalDirection::East, CardinalDirection::SouthSouthEast));
     }
 
 }
