@@ -3,7 +3,8 @@ use crate::player::{Meeple, MeepleColor, Player, RegionIndex};
 use colored::{Color, ColoredString, Colorize};
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::Debug;
-use crate::connected_regions::{ConnectedRegion, PlacedTileEdge, PlacedTileRegion};
+use uuid::Uuid;
+use crate::connected_regions::{ConnectedRegion, ConnectedRegionId, PlacedTileEdge, PlacedTileRegion};
 use crate::tile_definitions::{CLOISTER_IN_FIELD, RIVER_TERMINATOR};
 
 pub const TILE_WIDTH: usize = 7;
@@ -517,6 +518,47 @@ pub struct PlacedTile {
 impl PlacedTile {
     pub(crate) fn new(tile: &'static TileDefinition, x: i8, y: i8, rotations: u8) -> Self {
         PlacedTile { tile, placement: TilePlacement { coordinate: BoardCoordinate { x, y }, rotations }, meeple: Default::default() }
+    }
+
+    pub(crate) fn own_connected_regions(&self) -> Vec<ConnectedRegion> {
+        let regions = self.list_placed_tile_regions();
+
+        let mut connected_regions: Vec<_> = regions.into_iter().map(|region| {
+
+            let connected_edges: HashMap<PlacedTileEdge, Option<PlacedTileEdge>> = region.region.edges().iter().map(|edge| (PlacedTileEdge {
+                global_direction: edge.rotate(self.placement.rotations as usize),
+                coordinate: self.placement.coordinate,
+            }, None)).collect();
+
+            ConnectedRegion {
+                region_type: region.region.region_type(),
+                tile_regions: Vec::from([region]),
+                id: Uuid::new_v4(),
+                adjacent_regions: Default::default(),
+                connected_edges
+            }
+
+        }).collect();
+
+        let edge_index: HashMap<CardinalDirection, ConnectedRegionId> = connected_regions.iter().flat_map(|connected_region| {
+            connected_region.tile_regions.iter().flat_map(|region|region.region.edges().iter().map(|d|(d.clone(), connected_region.id)))
+        }).collect();
+
+        for connected_region in connected_regions.iter_mut() {
+
+            for edge in connected_region.tile_regions.first().expect("should have one").region.edges() {
+                let (left, right) = edge.adjacent();
+                for adjacent in [left, right] {
+                    let connected_region_id = edge_index.get(&adjacent).expect("all edges should be indexed").clone();
+                    if connected_region_id != connected_region.id {
+                        connected_region.adjacent_regions.insert(connected_region_id);
+                    }
+                }
+            }
+
+        }
+
+        connected_regions
     }
 
     pub(crate) fn get_opposite_river_end_direction(&self, direction: CardinalDirection) -> Option<CardinalDirection> {

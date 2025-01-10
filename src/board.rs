@@ -54,10 +54,15 @@ pub enum InvalidTilePlacement {
 pub struct TilePlacementSuccess {
     score_delta: HashMap<Player, u32>,
     placed_meeple: Option<Meeple>,
-    liberated_meeple: Vec<Meeple>
+    liberated_meeple: Vec<Meeple>,
 }
 
 impl Board {
+
+    pub(crate) fn get_tile_at_coordinate(&self, coordinate: &BoardCoordinate) -> Option<&PlacedTile> {
+        self.placed_tiles.get(coordinate)
+    }
+
     pub(crate) fn get_move_hints(&self, tile: &'static TileDefinition) -> Vec<MoveHint> {
         let possible_coordinates = self.possible_next_tile_coordinates();
 
@@ -67,29 +72,22 @@ impl Board {
 
             let mut region_sequences: HashSet<Vec<RegionType>> = HashSet::new();
 
-            (0..4)
-                .into_iter()
-                .filter(move |&rotations| {
-                    let region_sequence = tile.list_oriented_region_types(rotations);
+            (0..4).into_iter().filter(move |&rotations| {
+                let region_sequence = tile.list_oriented_region_types(rotations);
 
-                    region_sequences.insert(region_sequence)
-                })
-                .map(move |rotations| TilePlacement {
-                    coordinate,
-                    rotations,
-                })
+                region_sequences.insert(region_sequence)
+            }).map(move |rotations| TilePlacement {
+                coordinate,
+                rotations,
+            })
         });
 
-        candidate_tile_placements
-            .flat_map(|placement|{
-                (0..tile.regions.len()).map(|idx|(placement.clone(), Some(RegionIndex::new(idx)))).chain([(placement.clone(), None)]).collect::<Vec<_>>()
-            })
-            .filter(|(placement, meeple_region_index)| self.validate_tile_placement(tile, &placement, meeple_region_index).is_ok())
-            .map(|(tile_placement, meeple_placement)| MoveHint {
-                tile_placement,
-                meeple_placement,
-            })
-            .collect()
+        candidate_tile_placements.flat_map(|placement| {
+            (0..tile.regions.len()).map(|idx| (placement.clone(), Some(RegionIndex::new(idx)))).chain([(placement.clone(), None)]).collect::<Vec<_>>()
+        }).filter(|(placement, meeple_region_index)| self.validate_tile_placement(&PlacedTile {tile, placement: placement.clone(), meeple: meeple_region_index.map(|idx|(idx, Meeple::dummy()))}, None).is_ok()).map(|(tile_placement, meeple_placement)| MoveHint {
+            tile_placement,
+            meeple_placement,
+        }).collect()
     }
 
     pub(crate) fn new() -> Self {
@@ -99,7 +97,6 @@ impl Board {
     }
 
     pub(crate) fn new_with_tiles(/*players: Vec<Player>, */tiles: Vec<PlacedTile>) -> Result<Self, InvalidTilePlacement> {
-
         let mut board = Board::default();
 
         for tile in tiles {
@@ -113,21 +110,27 @@ impl Board {
         self.placed_tiles.len()
     }
 
-    pub(crate) fn place_tile(&mut self, tile: PlacedTile) -> Result<TilePlacementSuccess, InvalidTilePlacement> {
-        let meeple_region_index = tile.meeple.clone().map(|m|m.0);
-        self.validate_tile_placement(tile.tile, &tile.placement, &meeple_region_index)?;
+    fn get_candidate_regions_to_merge(&self, connected_region: &ConnectedRegion) -> HashSet<ConnectedRegionId> {
+        let mut regions_to_merge: HashSet<ConnectedRegionId> = Default::default();
 
-        let tile_connected_regions = ConnectedRegion::from_tile(&tile);
+        for edge in connected_region.connected_edges.keys() {
+            let opposite = edge.opposing_tile_edge();
+            if let Some(connected_region_id) = self.region_index.get(&opposite) {
+                regions_to_merge.insert(connected_region_id.clone());
+            }
+        }
+
+        regions_to_merge
+    }
+
+    pub(crate) fn place_tile(&mut self, tile: PlacedTile) -> Result<TilePlacementSuccess, InvalidTilePlacement> {
+
+        let tile_connected_regions = tile.own_connected_regions();
+
+        self.validate_tile_placement(&tile, Some(&tile_connected_regions))?;
 
         for mut connected_region in tile_connected_regions {
-            let mut regions_to_merge: HashSet<ConnectedRegionId> = Default::default();
-
-            for edge in connected_region.connected_edges.keys() {
-                let opposite = edge.opposing_tile_edge();
-                if let Some(connected_region_id) = self.region_index.get(&opposite) {
-                    regions_to_merge.insert(connected_region_id.clone());
-                }
-            }
+            let mut regions_to_merge = self.get_candidate_regions_to_merge(&connected_region);
 
             for region_id in regions_to_merge {
                 let merge_region = self.connected_regions.remove(&region_id).expect("should exist");
@@ -140,7 +143,6 @@ impl Board {
             }
 
             self.connected_regions.insert(connected_region.id, connected_region);
-
         }
 
 
@@ -181,43 +183,37 @@ impl Board {
 
     pub(crate) fn validate_tile_placement(
         &self,
-        tile: &'static TileDefinition,
-        placement: &TilePlacement,
-        meeple_region_index: &Option<RegionIndex>,
+        tile: &PlacedTile,
+        tile_connected_regions: Option<&Vec<ConnectedRegion>>,
     ) -> Result<(), InvalidTilePlacement> {
         // empty board is always valid for placement of a tile
         if self.placed_tiles.is_empty() {
             return Ok(());
         }
 
-        if self.placed_tiles.contains_key(&placement.coordinate) {
+        if self.placed_tiles.contains_key(&tile.placement.coordinate) {
             return Err(InvalidTilePlacement::TileAlreadyAtCoordinate);
         }
 
-        let surrounding_regions = self.get_surrounding_regions(&placement.coordinate);
+        let surrounding_regions = self.get_surrounding_regions(&tile.placement.coordinate);
 
         if surrounding_regions.iter().all(|region| region.is_none()) {
             return Err(InvalidTilePlacement::TileDoesNotContactPlacedTiles);
         }
 
-        let candidate_placed_tile = PlacedTile { tile, placement: placement.clone(), meeple: meeple_region_index.map(|idx|(idx, Meeple::dummy())) };
+        let own_regions = tile.tile.list_oriented_region_types(tile.placement.rotations);
 
-        let own_regions = tile.list_oriented_region_types(placement.rotations);
-
-        let region_pairings: Vec<_> = own_regions
-            .iter()
-            .zip(surrounding_regions)
-            .collect();
+        let region_pairings: Vec<_> = own_regions.iter().zip(surrounding_regions).collect();
 
         if region_pairings.iter().any(|(own_region, neighbor_region)| match neighbor_region {
-                Some(region) if &region != own_region => true,
-                _ => false,
-            })
+            Some(region) if &region != own_region => true,
+            _ => false,
+        })
         {
             return Err(InvalidTilePlacement::TileEdgesDoNotMatchPlacedTiles);
         }
 
-        if own_regions.iter().any(|r|matches!(r, RegionType::Water)) {
+        if own_regions.iter().any(|r| matches!(r, RegionType::Water)) {
             let paired_water = region_pairings.iter().filter(|(own_region, neighbor_region)| match (neighbor_region, own_region) {
                 (Some(RegionType::Water), RegionType::Water) => true,
                 _ => false,
@@ -227,25 +223,42 @@ impl Board {
                 return Err(InvalidTilePlacement::RiverMustBeConnected);
             }
 
-            if tile != &RIVER_TERMINATOR {
-
+            if tile.tile != &RIVER_TERMINATOR {
                 let (_, prev_tile) = self.placed_tiles.last().expect("There should always be a last tile");
 
-                let direction_to_prev = placement.coordinate.direction_to_adjacent_coordinate(prev_tile.placement.coordinate);
+                let direction_to_prev = tile.placement.coordinate.direction_to_adjacent_coordinate(prev_tile.placement.coordinate);
 
 
-                let current_heading = candidate_placed_tile.get_opposite_river_end_direction(direction_to_prev);
+                let current_heading = tile.get_opposite_river_end_direction(direction_to_prev);
                 let previous_source = prev_tile.get_opposite_river_end_direction(direction_to_prev.compass_opposite());
 
                 if previous_source == current_heading {
                     return Err(InvalidTilePlacement::RiverMustNotImmediatelyTurnOnItself);
                 }
             }
-
-
         }
 
-        // @todo meeple validation
+        if let Some((region_index, _)) = &tile.meeple {
+
+            let tile_connected_regions = if let Some(tile_connected_regions) = tile_connected_regions {
+                tile_connected_regions
+            } else {
+                &tile.own_connected_regions()
+            };
+
+            let tile_connected_regions = tile_connected_regions.iter()
+                .filter(|r|r.tile_regions.iter().any(|tr|tr.region_index == *region_index));
+
+            for connected_region in tile_connected_regions {
+                let regions_to_merge = self.get_candidate_regions_to_merge(&connected_region);
+                for region_id in regions_to_merge {
+                    let joined_region = self.connected_regions.get(&region_id).expect("should exist");
+                    if !joined_region.residents(self).is_empty() {
+                        return Err(InvalidTilePlacement::OtherMeepleAlreadyInConnectedRegion);
+                    }
+                }
+            }
+        }
 
         Ok(())
     }
@@ -254,31 +267,20 @@ impl Board {
         &self,
         board_coordinate: &BoardCoordinate,
     ) -> Vec<(CardinalDirection, Option<&PlacedTile>)> {
-        board_coordinate
-            .adjacent_coordinates()
-            .into_iter()
-            .map(|(direction, coordinate)| (direction, self.placed_tiles.get(&coordinate)))
-            .collect()
+        board_coordinate.adjacent_coordinates().into_iter().map(|(direction, coordinate)| (direction, self.placed_tiles.get(&coordinate))).collect()
     }
 
     fn get_surrounding_regions(
         &self,
         board_coordinate: &BoardCoordinate,
     ) -> Vec<Option<RegionType>> {
-        self.list_adjacent_tiles(board_coordinate)
-            .iter()
-            .flat_map(|(direction, tile)| {
-                if let Some(adjacent_tile) = tile {
-                    adjacent_tile
-                        .list_regions_on_edge(&direction.compass_opposite())
-                        .iter()
-                        .map(|region_type| Some(region_type.clone()))
-                        .collect()
-                } else {
-                    vec![None; 3]
-                }
-            })
-            .collect()
+        self.list_adjacent_tiles(board_coordinate).iter().flat_map(|(direction, tile)| {
+            if let Some(adjacent_tile) = tile {
+                adjacent_tile.list_regions_on_edge(&direction.compass_opposite()).iter().map(|region_type| Some(region_type.clone())).collect()
+            } else {
+                vec![None; 3]
+            }
+        }).collect()
     }
 
     pub(crate) fn get_connected_regions(&self) -> Vec<&ConnectedRegion> {
@@ -339,15 +341,16 @@ mod tests {
     fn test_valid_on_first_tile() {
         let board = Board::new();
 
-        assert!(board
-            .validate_tile_placement(
-                &STRAIGHT_ROAD,
-                &TilePlacement {
+        assert!(board.validate_tile_placement(
+            &PlacedTile {
+                tile: &STRAIGHT_ROAD,
+                placement: TilePlacement {
                     coordinate: BoardCoordinate { x: 0, y: 0 },
                     rotations: 0,
                 },
-            )
-            .is_ok())
+                meeple: None,
+            },None,
+        ).is_ok())
     }
 
     #[test]
@@ -359,20 +362,22 @@ mod tests {
                     coordinate: BoardCoordinate { x: 0, y: 0 },
                     rotations: 0,
                 },
-                meeple: HashMap::new()
+                meeple: None
             }],
         ).unwrap();
 
-        let res = board.validate_tile_placement(
-            &STRAIGHT_ROAD,
-            &TilePlacement {
-                coordinate: BoardCoordinate { x: 0, y: 0 },
-                rotations: 0,
-            },
+        let res = board.validate_tile_placement(&PlacedTile {
+                    tile: &STRAIGHT_ROAD,
+                    placement: TilePlacement {
+                        coordinate: BoardCoordinate { x: 0, y: 0 },
+                        rotations: 0,
+                    },
+                    meeple: None,
+                },None,
         );
 
         assert!(matches!(
-            res,
+        res,
             Err(InvalidTilePlacement::TileAlreadyAtCoordinate)
         ))
     }
@@ -386,17 +391,18 @@ mod tests {
                     coordinate: BoardCoordinate { x: 0, y: 0 },
                     rotations: 0,
                 },
-                meeple: HashMap::new()
+                meeple: None
             }],
         ).unwrap();
 
-        let res = board.validate_tile_placement(
-            &STRAIGHT_ROAD,
-            &TilePlacement {
-                coordinate: BoardCoordinate { x: 2, y: 0 },
-                rotations: 0,
-            },
-            None,
+        let res = board.validate_tile_placement(&PlacedTile {
+                    tile: &STRAIGHT_ROAD,
+                    placement: TilePlacement {
+                        coordinate: BoardCoordinate { x: 2, y: 0 },
+                        rotations: 0,
+                    },
+                    meeple: None,
+                },None,
         );
 
         assert!(matches!(
@@ -415,7 +421,7 @@ mod tests {
                         coordinate: BoardCoordinate { x: 0, y: 0 },
                         rotations: 0,
                     },
-                    meeple: HashMap::new()
+                    meeple: None
                 },
                 PlacedTile {
                     tile: &CORNER_ROAD,
@@ -423,7 +429,7 @@ mod tests {
                         coordinate: BoardCoordinate { x: 0, y: -1 },
                         rotations: 0,
                     },
-                    meeple: HashMap::new()
+                    meeple: None
                 },
                 PlacedTile {
                     tile: &CORNER_ROAD,
@@ -431,7 +437,7 @@ mod tests {
                         coordinate: BoardCoordinate { x: 1, y: -1 },
                         rotations: 1,
                     },
-                    meeple: HashMap::new()
+                    meeple: None
                 },
             ],
         ).unwrap();
@@ -469,7 +475,7 @@ mod tests {
                         coordinate: BoardCoordinate { x: 0, y: 0 },
                         rotations: 0,
                     },
-                    meeple: HashMap::new()
+                    meeple: None
                 },
                 PlacedTile {
                     tile: &CORNER_ROAD,
@@ -477,7 +483,7 @@ mod tests {
                         coordinate: BoardCoordinate { x: 0, y: -1 },
                         rotations: 0,
                     },
-                    meeple: HashMap::new()
+                    meeple: None
                 },
                 PlacedTile {
                     tile: &CORNER_ROAD,
@@ -485,18 +491,19 @@ mod tests {
                         coordinate: BoardCoordinate { x: 1, y: -1 },
                         rotations: 1,
                     },
-                    meeple: HashMap::new()
+                    meeple: None
                 },
             ],
         ).unwrap();
 
-        let res = board.validate_tile_placement(
-            &STRAIGHT_ROAD,
-            &TilePlacement {
-                coordinate: BoardCoordinate { x: 1, y: 0 },
-                rotations: 1,
-            },
-            None,
+        let res = board.validate_tile_placement(&PlacedTile {
+                    tile: &STRAIGHT_ROAD,
+                    placement: TilePlacement {
+                        coordinate: BoardCoordinate { x: 1, y: 0 },
+                        rotations: 1,
+                    },
+                    meeple: None,
+                },None,
         );
 
         assert!(matches!(
@@ -516,18 +523,19 @@ mod tests {
                         coordinate: BoardCoordinate { x: 0, y: 0 },
                         rotations: 0,
                     },
-                    meeple: HashMap::new()
+                    meeple: None
                 },
             ],
         ).unwrap();
 
-        let res = board.validate_tile_placement(
-            &STRAIGHT_RIVER,
-            &TilePlacement {
-                coordinate: BoardCoordinate { x: 1, y: 0 },
-                rotations: 0,
-            },
-            None,
+        let res = board.validate_tile_placement(&PlacedTile {
+                    tile: &STRAIGHT_RIVER,
+                    placement: TilePlacement {
+                        coordinate: BoardCoordinate { x: 1, y: 0 },
+                        rotations: 0,
+                    },
+                    meeple: None,
+                },None,
         );
 
         assert!(matches!(
@@ -545,23 +553,55 @@ mod tests {
                         coordinate: BoardCoordinate { x: 0, y: 0 },
                         rotations: 0,
                     },
-                    meeple: HashMap::new()
+                    meeple: None
                 },
             ],
         ).unwrap();
 
-        let res = board.validate_tile_placement(
-            &CORNER_RIVER,
-            &TilePlacement {
-                coordinate: BoardCoordinate { x: 0, y: -1 },
-                rotations: 3,
-            },
-            None,
+        let res = board.validate_tile_placement(&PlacedTile {
+                    tile: &CORNER_RIVER,
+                    placement: TilePlacement {
+                        coordinate: BoardCoordinate { x: 0, y: -1 },
+                        rotations: 3,
+                    },
+                    meeple: None,
+                },
+                                                None,
         );
 
         assert!(matches!(
             res,
             Err(InvalidTilePlacement::RiverMustNotImmediatelyTurnOnItself)
+        ))
+    }
+
+    #[test]
+    fn test_invalid_if_meeple_already_in_region() {
+        let board = Board::new_with_tiles(
+            vec![
+                PlacedTile {
+                    tile: &STRAIGHT_ROAD,
+                    placement: TilePlacement {
+                        coordinate: BoardCoordinate { x: 0, y: 0 },
+                        rotations: 0,
+                    },
+                    meeple: Some((RegionIndex::new(0), Meeple::dummy()))
+                },
+            ],
+        ).unwrap();
+
+        let res = board.validate_tile_placement(&PlacedTile {
+            tile: &STRAIGHT_ROAD,
+            placement: TilePlacement {
+                coordinate: BoardCoordinate { x: 0, y: -1 },
+                rotations: 0,
+            },
+            meeple: Some((RegionIndex::new(0), Meeple::dummy()))
+        }, None);
+
+        assert!(matches!(
+            res,
+            Err(InvalidTilePlacement::OtherMeepleAlreadyInConnectedRegion)
         ))
     }
 }
