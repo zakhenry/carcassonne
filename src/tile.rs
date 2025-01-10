@@ -1,5 +1,5 @@
 use std::cmp::PartialEq;
-use crate::player::{Player, RegionIndex};
+use crate::player::{Meeple, MeepleColor, Player, RegionIndex};
 use colored::{Color, ColoredString, Colorize};
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::Debug;
@@ -8,10 +8,27 @@ use crate::tile_definitions::{CLOISTER_IN_FIELD, RIVER_TERMINATOR};
 
 pub const TILE_WIDTH: usize = 7;
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub(crate) struct TileCoordinate {
-    pub(crate) x: u8,
-    pub(crate) y: u8,
+    pub(crate) x: usize,
+    pub(crate) y: usize,
+}
+
+impl TileCoordinate {
+    pub(crate) fn new(x: usize, y: usize) -> Self {
+        Self { x, y }
+    }
+
+    pub(crate) fn rotate_around_center(&self, rotations: u8) -> Self {
+        let rotations = rotations % 4;
+        match rotations {
+            0 => self.clone(), // No rotation
+            1 => Self::new(TILE_WIDTH - 1 - self.y, self.x), // 90 degrees clockwise
+            2 => Self::new(TILE_WIDTH - 1 - self.x, TILE_WIDTH - 1 - self.y), // 180 degrees
+            3 => Self::new(self.y, (TILE_WIDTH - 1 - self.x)), // 270 degrees clockwise
+            _ => unreachable!(), // This branch is logically unreachable
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
@@ -40,13 +57,13 @@ impl BoardCoordinate {
         match direction {
             CardinalDirection::North | CardinalDirection::NorthNorthEast | CardinalDirection::NorthNorthWest => BoardCoordinate::new(self.x, self.y - 1),
             CardinalDirection::EastNorthEast | CardinalDirection::East | CardinalDirection::EastSouthEast => BoardCoordinate::new(self.x + 1, self.y),
-            CardinalDirection::SouthSouthEast | CardinalDirection::South  | CardinalDirection::SouthSouthWest => BoardCoordinate::new(self.x, self.y + 1),
+            CardinalDirection::SouthSouthEast | CardinalDirection::South | CardinalDirection::SouthSouthWest => BoardCoordinate::new(self.x, self.y + 1),
             CardinalDirection::WestSouthWest | CardinalDirection::West | CardinalDirection::WestNorthWest => BoardCoordinate::new(self.x - 1, self.y),
         }
     }
 
     pub(crate) fn adjacent_coordinates(&self) -> BTreeMap<CardinalDirection, BoardCoordinate> {
-        BTreeMap::from_iter(PRIMARY_CARDINAL_DIRECTIONS.iter().map(|d|(d.clone(), self.adjacent_in_direction(d))))
+        BTreeMap::from_iter(PRIMARY_CARDINAL_DIRECTIONS.iter().map(|d| (d.clone(), self.adjacent_in_direction(d))))
     }
 }
 
@@ -81,12 +98,11 @@ pub(crate) enum CardinalDirection {
 
 // @todo the methods here are jank or verbose, and there are almost certainly better approaches.
 impl CardinalDirection {
-
-    pub (crate) fn rotate(&self, n: usize) -> Self {
-        PERIMETER_REGION_DIRECTIONS.iter().cycle().skip(n * 3 + PERIMETER_REGION_DIRECTIONS.iter().position(|d|d == self).expect("should exist")).take(1).next().expect("should have a field").clone()
+    pub(crate) fn rotate(&self, n: usize) -> Self {
+        PERIMETER_REGION_DIRECTIONS.iter().cycle().skip(n * 3 + PERIMETER_REGION_DIRECTIONS.iter().position(|d| d == self).expect("should exist")).take(1).next().expect("should have a field").clone()
     }
 
-    pub (crate) fn adjacent(&self) -> (Self, Self) {
+    pub(crate) fn adjacent(&self) -> (Self, Self) {
         match self {
             Self::North => (Self::NorthNorthWest, Self::NorthNorthEast),
             Self::NorthNorthEast => (Self::North, Self::EastNorthEast),
@@ -220,6 +236,20 @@ impl Region {
         }
     }
 
+    pub(crate) fn meeple_coordinate_rotated(&self, rotations: u8) -> Option<TileCoordinate> {
+        let coordinate = match self {
+            Region::City { meeple_coordinate, .. } => Some(meeple_coordinate),
+            Region::Field { meeple_coordinate, .. } => Some(meeple_coordinate),
+            Region::Road { meeple_coordinate, .. } => Some(meeple_coordinate),
+            Region::Water { .. } => None,
+            Region::Cloister { meeple_coordinate, .. } => Some(meeple_coordinate),
+        }.cloned();
+
+        coordinate.map(|coord| {
+            coord.rotate_around_center(rotations)
+        })
+    }
+
     // @todo the existence of the two enums is a code smell. Some refactoring is needed!
     pub(crate) fn region_type(&self) -> RegionType {
         match self {
@@ -265,21 +295,13 @@ impl TileDefinition {
     fn perimeter_regions(&self) -> Vec<RegionType> {
         let directed_regions = self.directed_regions();
 
-        PERIMETER_REGION_DIRECTIONS
-            .iter()
-            .filter_map(|direction| directed_regions.get(direction).map(|r| r.region_type()))
-            .collect()
+        PERIMETER_REGION_DIRECTIONS.iter().filter_map(|direction| directed_regions.get(direction).map(|r| r.region_type())).collect()
     }
 
     pub(crate) fn list_oriented_region_types(&self, rotations: u8) -> Vec<RegionType> {
         let perimeter = self.perimeter_regions();
 
-        perimeter
-            .into_iter()
-            .cycle()
-            .skip(((4 - rotations) * 3) as usize)
-            .take(12)
-            .collect()
+        perimeter.into_iter().cycle().skip(((4 - rotations) * 3) as usize).take(12).collect()
     }
 }
 
@@ -292,6 +314,22 @@ pub(crate) enum RenderCell {
     Pennant,
     Water,
     Corner, // @todo remove?
+}
+
+impl MeepleColor {
+    fn render_color(&self, style: &RenderStyle) -> Color {
+        match (self, style) {
+            (MeepleColor::Red, RenderStyle::Ascii | RenderStyle::Ansi ) => Color::Red,
+            (MeepleColor::Green, RenderStyle::Ascii | RenderStyle::Ansi ) => Color::Green,
+            (MeepleColor::Blue, RenderStyle::Ascii | RenderStyle::Ansi ) => Color::Blue,
+            (MeepleColor::Black, RenderStyle::Ascii | RenderStyle::Ansi ) => Color::Black,
+
+            (MeepleColor::Red, RenderStyle::TrueColor ) => Color::TrueColor { r: 194, g: 0, b: 25},
+            (MeepleColor::Green, RenderStyle::TrueColor ) => Color::TrueColor { r: 16, g: 126, b: 50},
+            (MeepleColor::Blue, RenderStyle::TrueColor ) => Color::TrueColor { r: 10, g: 79, b: 147},
+            (MeepleColor::Black, RenderStyle::TrueColor ) => Color::TrueColor { r: 43, g: 42, b: 44},
+        }
+    }
 }
 
 impl RenderCell {
@@ -307,10 +345,51 @@ impl RenderCell {
         }
     }
 
-    fn colors(&self) -> (Color, Color, Color, Color) {
-        match self {
+    fn render_ascii(&self, row_idx: usize, column_idx: usize, meeple: Option<&Meeple>) -> String {
+        if let RenderCell::Corner = self {
+            " "
+        } else if row_idx == 0 {
+            "━━"
+        } else if column_idx == 0 {
+            "┃"
+        } else if row_idx == TILE_WIDTH - 1 {
+            "━━"
+        } else if column_idx == TILE_WIDTH - 1 {
+            "┃"
+        } else {
+            self.ascii_code()
+        }.to_string()
+    }
+
+    fn render_ansi(&self, row_idx: usize, column_idx: usize, meeple: Option<&Meeple>) -> String {
+        let color = match self {
+            Self::Field => Color::Green,
+            Self::Road => Color::BrightBlack,
+            Self::City => Color::Yellow,
+            Self::Cloister => Color::BrightWhite,
+            Self::Pennant => Color::Red,
+            Self::Water => Color::Blue,
+            Self::Corner => Color::Black
+        };
+
+        if let RenderCell::Corner = self {
+            " ".black()
+        } else if row_idx == 0 {
+            "━━".black().on_color(color)
+        } else if column_idx == 0 {
+            "┃".black().on_color(color)
+        } else if row_idx == TILE_WIDTH - 1 {
+            "━━".black().on_color(color)
+        } else if column_idx == TILE_WIDTH - 1 {
+            "┃".black().on_color(color)
+        } else {
+            "  ".on_color(color)
+        }.to_string()
+    }
+
+    fn render_true_color(&self, row_idx: usize, column_idx: usize, meeple: Option<&Meeple>) -> String {
+        let (primary, light, dark) = match self {
             Self::Field => (
-                Color::Green,
                 Color::TrueColor {
                     r: 143,
                     g: 185,
@@ -328,7 +407,6 @@ impl RenderCell {
                 },
             ),
             Self::Road => (
-                Color::BrightBlack,
                 Color::TrueColor {
                     r: 190,
                     g: 190,
@@ -346,7 +424,6 @@ impl RenderCell {
                 },
             ),
             Self::City => (
-                Color::Yellow,
                 Color::TrueColor {
                     r: 199,
                     g: 147,
@@ -367,11 +444,9 @@ impl RenderCell {
                 Color::BrightWhite,
                 Color::BrightWhite,
                 Color::BrightWhite,
-                Color::BrightWhite,
             ),
-            Self::Pennant => (Color::Red, Color::Red, Color::Red, Color::Red),
+            Self::Pennant => (Color::Red, Color::Red, Color::Red),
             Self::Water => (
-                Color::Blue,
                 Color::TrueColor {
                     r: 143,
                     g: 163,
@@ -388,7 +463,39 @@ impl RenderCell {
                     b: 177,
                 },
             ),
-            Self::Corner => (Color::Black, Color::Red, Color::Red, Color::Red),
+            Self::Corner => (Color::Red, Color::Red, Color::Red),
+        };
+
+        if let RenderCell::Corner = self {
+            "  ".to_string()
+        } else if row_idx == 0 {
+            "▄▄".color(primary).on_color(light).to_string()
+        } else if column_idx == 0 {
+            " ".on_color(light).to_string() + &" ".on_color(primary).to_string()
+        } else if row_idx == TILE_WIDTH - 1 {
+            "▄▄".color(dark).on_color(primary).to_string()
+        } else if column_idx == TILE_WIDTH - 1 {
+            " ".on_color(primary).to_string() + &" ".on_color(dark).to_string()
+        } else {
+            match self {
+                RenderCell::Pennant => " ⛨".bold().color(Color::TrueColor {
+                    r: 0,
+                    g: 100,
+                    b: 174,
+                }).on_color(Color::TrueColor {
+                    r: 199,
+                    g: 147,
+                    b: 88,
+                }).to_string(),
+                _ => {
+
+                    if let Some(meeple) = meeple {
+                        " ꆜ".bold().color(meeple.color.render_color(&RenderStyle::TrueColor)).on_color(primary).to_string()
+                    } else {
+                        "  ".on_color(primary).to_string()
+                    }
+                }
+            }
         }
     }
 }
@@ -396,7 +503,7 @@ impl RenderCell {
 pub enum RenderStyle {
     Ansi,
     TrueColor,
-    Ascii
+    Ascii,
     // image??
 }
 
@@ -404,26 +511,25 @@ pub enum RenderStyle {
 pub struct PlacedTile {
     pub(crate) tile: &'static TileDefinition,
     pub(crate) placement: TilePlacement,
+    pub(crate) meeple: Option<(RegionIndex, Meeple)>,
 }
 
 impl PlacedTile {
-
     pub(crate) fn new(tile: &'static TileDefinition, x: i8, y: i8, rotations: u8) -> Self {
-        PlacedTile { tile, placement: TilePlacement { coordinate: BoardCoordinate { x, y }, rotations } }
+        PlacedTile { tile, placement: TilePlacement { coordinate: BoardCoordinate { x, y }, rotations }, meeple: Default::default() }
     }
 
     pub(crate) fn get_opposite_river_end_direction(&self, direction: CardinalDirection) -> Option<CardinalDirection> {
-
         if self.tile == &RIVER_TERMINATOR {
-            return None
+            return None;
         }
 
-        let region = self.tile.regions.iter().filter(|r|matches!(r, Region::Water {..})).next().expect("should be river tile");
+        let region = self.tile.regions.iter().filter(|r| matches!(r, Region::Water {..})).next().expect("should be river tile");
 
-        let rotated_edges: Vec<_> = region.edges().iter().map(|d|d.rotate(self.placement.rotations as usize)).collect();
+        let rotated_edges: Vec<_> = region.edges().iter().map(|d| d.rotate(self.placement.rotations as usize)).collect();
         assert_eq!(rotated_edges.len(), 2);
 
-        rotated_edges.into_iter().filter(|&e|e != direction).next()
+        rotated_edges.into_iter().filter(|&e| e != direction).next()
     }
 
     pub(crate) fn list_regions_on_edge(
@@ -444,92 +550,46 @@ impl PlacedTile {
     }
 
     pub(crate) fn list_placed_tile_regions(&self) -> Vec<PlacedTileRegion> {
-
-        (0..self.tile.regions.len()).map(|idx|{
+        (0..self.tile.regions.len()).map(|idx| {
             PlacedTileRegion::new(self, RegionIndex::new(idx))
         }).collect()
-
     }
 
     pub fn render_to_lines(
-        &self, /* @todo placed meeple */
+        &self,
         render_style: &RenderStyle,
     ) -> Vec<String> {
-        self.tile
-            .render
-            .rotated(self.placement.rotations)
-            .enumerate()
-            .map(|(row_idx, row)| {
-                let chars: String = row
-                    .enumerate()
-                    .map(|(column_idx, cell)| {
-                        // @todo consider performance of this call
 
-                        let (portable, primary_true, lighten_true, darken_true) = cell.colors();
 
-                        match render_style {
-                            RenderStyle::Ascii => if let RenderCell::Corner = cell {
-                                " "
-                            } else if row_idx == 0 {
-                            "━━"
-                        } else if column_idx == 0 {
-                            "┃"
-                        } else if row_idx == TILE_WIDTH - 1 {
-                            "━━"
-                        } else if column_idx == TILE_WIDTH - 1 {
-                            "┃"
-                        } else {
-                            cell.ascii_code()
-                        }.to_string(),
-                            RenderStyle::Ansi => if let RenderCell::Corner = cell {
-                                " ".black()
-                            } else if row_idx == 0 {
-                                "━━".black().on_color(portable)
-                            } else if column_idx == 0 {
-                                "┃".black().on_color(portable)
-                            } else if row_idx == TILE_WIDTH - 1 {
-                                "━━".black().on_color(portable)
-                            } else if column_idx == TILE_WIDTH - 1 {
-                                "┃".black().on_color(portable)
-                            } else {
-                                "  ".on_color(portable)
-                            }
-                            .to_string(),
-                            RenderStyle::TrueColor => {
-                                if let RenderCell::Corner = cell {
-                                    "  ".to_string()
-                                } else if row_idx == 0 {
-                                    "▄▄".color(primary_true).on_color(lighten_true).to_string()
-                                } else if column_idx == 0 {
-                                    " ".on_color(lighten_true).to_string()
-                                        + &" ".on_color(primary_true).to_string()
-                                } else if row_idx == TILE_WIDTH - 1 {
-                                    "▄▄".color(darken_true).on_color(primary_true).to_string()
-                                } else if column_idx == TILE_WIDTH - 1 {
-                                    " ".on_color(primary_true).to_string()
-                                        + &" ".on_color(darken_true).to_string()
-                                } else {
-                                    match cell {
-                                        RenderCell::Pennant => " ⛨".bold().color(Color::TrueColor {
-                                            r: 0,
-                                            g: 100,
-                                            b: 174,
-                                        }).on_color(Color::TrueColor {
-                                            r: 199,
-                                            g: 147,
-                                            b: 88,
-                                        }).to_string(),
-                                        _ => "  ".on_color(primary_true).to_string()
-                                    }
-                                }
-                            }
-                        }
-                    })
-                    .collect();
-
-                chars
+        let meeple_render_coordinate = if let Some((meeple_region_index, meeple)) = &self.meeple {
+            self.tile.regions.iter().enumerate().find_map(|(tile_region_index, region)| {
+                if **meeple_region_index == tile_region_index {
+                    region.meeple_coordinate_rotated(self.placement.rotations)
+                } else { None }
+                    .map(|coordinate|(coordinate, meeple))
             })
-            .collect()
+        } else { None };
+
+        self.tile.render.rotated(self.placement.rotations).enumerate().map(|(row_idx, row)| {
+            let chars: String = row.enumerate().map(|(column_idx, cell): (usize, &RenderCell)| {
+
+                let tile_coord = TileCoordinate::new(column_idx, row_idx);
+
+                let meeple= match &meeple_render_coordinate {
+                    Some((coordinate, meeple)) if coordinate == &tile_coord => Some(meeple),
+                    _ => None
+                };
+
+
+                match render_style {
+                    RenderStyle::Ascii => cell.render_ascii(row_idx, column_idx, meeple.map(|v| &**v)),
+                    RenderStyle::Ansi => cell.render_ansi(row_idx, column_idx, meeple.map(|v| &**v)),
+                    RenderStyle::TrueColor => cell.render_true_color(row_idx, column_idx, meeple.map(|v| &**v))
+                }
+            }).collect();
+
+            chars
+        }).collect()
     }
 }
 
@@ -540,7 +600,7 @@ impl TileRenderRepresentation {
     pub(crate) fn rotated<'a>(
         &'a self,
         rotations: u8,
-    ) -> impl Iterator<Item = impl Iterator<Item = &'a RenderCell>> + 'a {
+    ) -> impl Iterator<Item=impl Iterator<Item=&'a RenderCell>> + 'a {
         let rotations = rotations % 4; // Normalize rotations to 0..3
 
         (0..TILE_WIDTH).map(move |r| {
@@ -587,6 +647,7 @@ mod tests {
                 rotations: 0,
                 coordinate: BoardCoordinate::new(0, 0),
             },
+            meeple: Default::default(),
         };
 
         assert_eq!(
@@ -615,6 +676,7 @@ mod tests {
                 rotations: 1,
                 coordinate: BoardCoordinate::new(0, 0),
             },
+            meeple: Default::default(),
         };
 
         assert_eq!(
@@ -625,16 +687,16 @@ mod tests {
 
     #[test]
     fn test_direction_to_adjacent_coordinate() {
-        assert_eq!(BoardCoordinate{x: 0, y: 0}.direction_to_adjacent_coordinate(BoardCoordinate {x: 0, y: -1}), CardinalDirection::North);
-        assert_eq!(BoardCoordinate{x: 0, y: 0}.direction_to_adjacent_coordinate(BoardCoordinate {x: 1, y: 0}), CardinalDirection::East);
-        assert_eq!(BoardCoordinate{x: 0, y: 0}.direction_to_adjacent_coordinate(BoardCoordinate {x: 0, y: 1}), CardinalDirection::South);
-        assert_eq!(BoardCoordinate{x: 0, y: 0}.direction_to_adjacent_coordinate(BoardCoordinate {x: -1, y: 0}), CardinalDirection::West);
+        assert_eq!(BoardCoordinate { x: 0, y: 0 }.direction_to_adjacent_coordinate(BoardCoordinate { x: 0, y: -1 }), CardinalDirection::North);
+        assert_eq!(BoardCoordinate { x: 0, y: 0 }.direction_to_adjacent_coordinate(BoardCoordinate { x: 1, y: 0 }), CardinalDirection::East);
+        assert_eq!(BoardCoordinate { x: 0, y: 0 }.direction_to_adjacent_coordinate(BoardCoordinate { x: 0, y: 1 }), CardinalDirection::South);
+        assert_eq!(BoardCoordinate { x: 0, y: 0 }.direction_to_adjacent_coordinate(BoardCoordinate { x: -1, y: 0 }), CardinalDirection::West);
     }
 
     #[test]
     #[should_panic]
     fn test_direction_to_adjacent_coordinate_panics_on_non_adjacent() {
-        BoardCoordinate{x: 0, y: 0}.direction_to_adjacent_coordinate(BoardCoordinate {x: 1, y: 1});
+        BoardCoordinate { x: 0, y: 0 }.direction_to_adjacent_coordinate(BoardCoordinate { x: 1, y: 1 });
     }
 
 
@@ -650,5 +712,4 @@ mod tests {
         assert_eq!(CardinalDirection::North.adjacent(), (CardinalDirection::NorthNorthWest, CardinalDirection::NorthNorthEast));
         assert_eq!(CardinalDirection::EastSouthEast.adjacent(), (CardinalDirection::East, CardinalDirection::SouthSouthEast));
     }
-
 }

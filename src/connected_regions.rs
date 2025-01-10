@@ -265,7 +265,7 @@ mod tests {
     }
 
     fn assert_connected_regions(placed_tiles: &[PlacedTile], expectation: &[(RegionType, bool)]) -> () {
-        let board = Board::new_with_tiles(vec![Player::red(), Player::green()], placed_tiles.to_vec()).unwrap();
+        let board = Board::new_with_tiles(placed_tiles.to_vec()).unwrap();
 
         println!("{}",board.render(RenderStyle::Ascii));
 

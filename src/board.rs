@@ -23,7 +23,7 @@ struct RegionScore {
 
 #[derive(Debug, Default)]
 pub struct Board {
-    players: Vec<Player>,
+    // players: Vec<Player>,
     placed_tiles: IndexMap<BoardCoordinate, PlacedTile>,
     connected_regions: HashMap<ConnectedRegionId, ConnectedRegion>,
     region_index: HashMap<PlacedTileEdge, ConnectedRegionId>,
@@ -35,7 +35,7 @@ pub struct Board {
 
 pub(crate) struct MoveHint {
     pub(crate) tile_placement: TilePlacement,
-    meeple_placement: Option<RegionIndex>,
+    pub(crate) meeple_placement: Option<RegionIndex>,
     // @todo score
 }
 
@@ -81,24 +81,26 @@ impl Board {
         });
 
         candidate_tile_placements
-            .filter(|placement| self.validate_tile_placement(tile, placement).is_ok())
-            .map(|tile_placement| MoveHint {
+            .flat_map(|placement|{
+                (0..tile.regions.len()).map(|idx|(placement.clone(), Some(RegionIndex::new(idx)))).chain([(placement.clone(), None)]).collect::<Vec<_>>()
+            })
+            .filter(|(placement, meeple_region_index)| self.validate_tile_placement(tile, &placement, meeple_region_index).is_ok())
+            .map(|(tile_placement, meeple_placement)| MoveHint {
                 tile_placement,
-                meeple_placement: None,
+                meeple_placement,
             })
             .collect()
     }
 
-    pub(crate) fn new(players: Vec<Player>) -> Self {
+    pub(crate) fn new() -> Self {
         Self {
-            players,
             ..Default::default()
         }
     }
 
-    pub(crate) fn new_with_tiles(players: Vec<Player>, tiles: Vec<PlacedTile>) -> Result<Self, InvalidTilePlacement> {
+    pub(crate) fn new_with_tiles(/*players: Vec<Player>, */tiles: Vec<PlacedTile>) -> Result<Self, InvalidTilePlacement> {
 
-        let mut board = Board::new(players);
+        let mut board = Board::default();
 
         for tile in tiles {
             board.place_tile(tile)?;
@@ -112,7 +114,8 @@ impl Board {
     }
 
     pub(crate) fn place_tile(&mut self, tile: PlacedTile) -> Result<TilePlacementSuccess, InvalidTilePlacement> {
-        self.validate_tile_placement(tile.tile, &tile.placement)?;
+        let meeple_region_index = tile.meeple.clone().map(|m|m.0);
+        self.validate_tile_placement(tile.tile, &tile.placement, &meeple_region_index)?;
 
         let tile_connected_regions = ConnectedRegion::from_tile(&tile);
 
@@ -180,6 +183,7 @@ impl Board {
         &self,
         tile: &'static TileDefinition,
         placement: &TilePlacement,
+        meeple_region_index: &Option<RegionIndex>,
     ) -> Result<(), InvalidTilePlacement> {
         // empty board is always valid for placement of a tile
         if self.placed_tiles.is_empty() {
@@ -196,7 +200,7 @@ impl Board {
             return Err(InvalidTilePlacement::TileDoesNotContactPlacedTiles);
         }
 
-        let candidate_placed_tile = PlacedTile { tile, placement: placement.clone() };
+        let candidate_placed_tile = PlacedTile { tile, placement: placement.clone(), meeple: meeple_region_index.map(|idx|(idx, Meeple::dummy())) };
 
         let own_regions = tile.list_oriented_region_types(placement.rotations);
 
@@ -333,7 +337,7 @@ mod tests {
 
     #[test]
     fn test_valid_on_first_tile() {
-        let board = Board::new(vec![Player::red(), Player::green()]);
+        let board = Board::new();
 
         assert!(board
             .validate_tile_placement(
@@ -341,7 +345,7 @@ mod tests {
                 &TilePlacement {
                     coordinate: BoardCoordinate { x: 0, y: 0 },
                     rotations: 0,
-                }
+                },
             )
             .is_ok())
     }
@@ -349,13 +353,13 @@ mod tests {
     #[test]
     fn test_invalid_if_tile_already_at_coordinate() {
         let board = Board::new_with_tiles(
-            vec![Player::red(), Player::green()],
             vec![PlacedTile {
                 tile: &STRAIGHT_ROAD,
                 placement: TilePlacement {
                     coordinate: BoardCoordinate { x: 0, y: 0 },
                     rotations: 0,
                 },
+                meeple: HashMap::new()
             }],
         ).unwrap();
 
@@ -376,13 +380,13 @@ mod tests {
     #[test]
     fn test_invalid_if_tile_does_not_contact_placed_tiles() {
         let board = Board::new_with_tiles(
-            vec![Player::red(), Player::green()],
             vec![PlacedTile {
                 tile: &STRAIGHT_ROAD,
                 placement: TilePlacement {
                     coordinate: BoardCoordinate { x: 0, y: 0 },
                     rotations: 0,
                 },
+                meeple: HashMap::new()
             }],
         ).unwrap();
 
@@ -392,6 +396,7 @@ mod tests {
                 coordinate: BoardCoordinate { x: 2, y: 0 },
                 rotations: 0,
             },
+            None,
         );
 
         assert!(matches!(
@@ -403,7 +408,6 @@ mod tests {
     #[test]
     fn test_get_surrounding_regions() {
         let board = Board::new_with_tiles(
-            vec![Player::red(), Player::green()],
             vec![
                 PlacedTile {
                     tile: &STRAIGHT_ROAD,
@@ -411,6 +415,7 @@ mod tests {
                         coordinate: BoardCoordinate { x: 0, y: 0 },
                         rotations: 0,
                     },
+                    meeple: HashMap::new()
                 },
                 PlacedTile {
                     tile: &CORNER_ROAD,
@@ -418,6 +423,7 @@ mod tests {
                         coordinate: BoardCoordinate { x: 0, y: -1 },
                         rotations: 0,
                     },
+                    meeple: HashMap::new()
                 },
                 PlacedTile {
                     tile: &CORNER_ROAD,
@@ -425,6 +431,7 @@ mod tests {
                         coordinate: BoardCoordinate { x: 1, y: -1 },
                         rotations: 1,
                     },
+                    meeple: HashMap::new()
                 },
             ],
         ).unwrap();
@@ -455,7 +462,6 @@ mod tests {
     #[test]
     fn test_invalid_if_tile_edges_do_not_match_placed_tiles() {
         let board = Board::new_with_tiles(
-            vec![Player::red(), Player::green()],
             vec![
                 PlacedTile {
                     tile: &STRAIGHT_ROAD,
@@ -463,6 +469,7 @@ mod tests {
                         coordinate: BoardCoordinate { x: 0, y: 0 },
                         rotations: 0,
                     },
+                    meeple: HashMap::new()
                 },
                 PlacedTile {
                     tile: &CORNER_ROAD,
@@ -470,6 +477,7 @@ mod tests {
                         coordinate: BoardCoordinate { x: 0, y: -1 },
                         rotations: 0,
                     },
+                    meeple: HashMap::new()
                 },
                 PlacedTile {
                     tile: &CORNER_ROAD,
@@ -477,6 +485,7 @@ mod tests {
                         coordinate: BoardCoordinate { x: 1, y: -1 },
                         rotations: 1,
                     },
+                    meeple: HashMap::new()
                 },
             ],
         ).unwrap();
@@ -487,6 +496,7 @@ mod tests {
                 coordinate: BoardCoordinate { x: 1, y: 0 },
                 rotations: 1,
             },
+            None,
         );
 
         assert!(matches!(
@@ -499,7 +509,6 @@ mod tests {
     #[test]
     fn test_invalid_if_river_is_disconnected() {
         let board = Board::new_with_tiles(
-            vec![Player::red(), Player::green()],
             vec![
                 PlacedTile {
                     tile: &STRAIGHT_RIVER,
@@ -507,6 +516,7 @@ mod tests {
                         coordinate: BoardCoordinate { x: 0, y: 0 },
                         rotations: 0,
                     },
+                    meeple: HashMap::new()
                 },
             ],
         ).unwrap();
@@ -517,6 +527,7 @@ mod tests {
                 coordinate: BoardCoordinate { x: 1, y: 0 },
                 rotations: 0,
             },
+            None,
         );
 
         assert!(matches!(
@@ -527,7 +538,6 @@ mod tests {
     #[test]
     fn test_invalid_if_river_turns_on_itself() {
         let board = Board::new_with_tiles(
-            vec![Player::red(), Player::green()],
             vec![
                 PlacedTile {
                     tile: &CORNER_RIVER,
@@ -535,6 +545,7 @@ mod tests {
                         coordinate: BoardCoordinate { x: 0, y: 0 },
                         rotations: 0,
                     },
+                    meeple: HashMap::new()
                 },
             ],
         ).unwrap();
@@ -545,6 +556,7 @@ mod tests {
                 coordinate: BoardCoordinate { x: 0, y: -1 },
                 rotations: 3,
             },
+            None,
         );
 
         assert!(matches!(

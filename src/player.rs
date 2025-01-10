@@ -2,12 +2,11 @@ use std::ops::Deref;
 use crate::tile::PlacedTile;
 use uuid::Uuid;
 
-#[derive(Debug)]
-enum PlayerColor {
+#[derive(Debug, Clone)]
+pub(crate) enum MeepleColor {
     Red,
     Green,
     Blue,
-    Yellow,
     Black,
 }
 
@@ -17,40 +16,42 @@ const MEEPLE_COUNT: usize = 7;
 
 #[derive(Debug)]
 pub struct Player {
-    id: PlayerId,
-    color: PlayerColor,
+    pub(crate) id: PlayerId,
     name: Option<String>,
-    meeple: Vec<Meeple>,
+    pub(crate) meeple: Vec<Meeple>,
 }
 
 impl Player {
-    fn new(color: PlayerColor) -> Self {
+    fn new(color: MeepleColor) -> Self {
         let meeple = Vec::with_capacity(MEEPLE_COUNT);
 
         let mut player = Self {
             id: PlayerId::new_v4(),
             name: None,
-            color,
             meeple,
         };
 
         for _ in 0..MEEPLE_COUNT {
-            player.meeple.push(Meeple::new(&player));
+            player.meeple.push(Meeple::new(&player, color.clone()));
         }
 
         player
     }
 
     pub(crate) fn black() -> Self {
-        Self::new(PlayerColor::Black)
+        Self::new(MeepleColor::Black)
     }
 
     pub(crate) fn green() -> Self {
-        Self::new(PlayerColor::Green)
+        Self::new(MeepleColor::Green)
     }
 
     pub(crate) fn red() -> Self {
-        Self::new(PlayerColor::Red)
+        Self::new(MeepleColor::Red)
+    }
+
+    pub(crate) fn blue() -> Self {
+        Self::new(MeepleColor::Blue)
     }
 }
 
@@ -71,25 +72,24 @@ impl Deref for RegionIndex {
     }
 }
 
-#[derive(Debug)]
-struct MeepleLocation {
-    placed_tile: PlacedTile,
-    region_index: RegionIndex,
-}
-
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Meeple {
-    id: Uuid,
+    pub(crate) color: MeepleColor,
     player_id: PlayerId,
-    location: Option<MeepleLocation>,
 }
 
 impl Meeple {
-    fn new(player: &Player) -> Self {
+    fn new(player: &Player, color: MeepleColor) -> Self {
         Self {
             player_id: player.id,
-            id: Uuid::new_v4(),
-            location: None,
+            color
+        }
+    }
+
+    pub(crate) fn dummy() -> Self {
+        Self {
+            player_id: Uuid::nil(),
+            color: MeepleColor::Black
         }
     }
 }
@@ -100,12 +100,8 @@ mod tests {
 
     #[test]
     fn test_new_player_has_meeple_all_with_no_placement() {
-        let player = Player::new(PlayerColor::Red);
+        let player = Player::new(MeepleColor::Red);
 
         assert_eq!(player.meeple.len(), MEEPLE_COUNT);
-
-        for meeple in player.meeple {
-            assert!(matches!(meeple.location, None))
-        }
     }
 }
