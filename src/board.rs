@@ -1,5 +1,5 @@
 use crate::connected_regions::{
-    ConnectedRegion, ConnectedRegionId, PlacedTileEdge, PlacedTileRegion,
+    ConnectedRegion, ConnectedRegionId, PlacedTileEdge,
 };
 use crate::player::{Meeple, Player, RegionIndex};
 use crate::tile::{
@@ -8,9 +8,7 @@ use crate::tile::{
 };
 use crate::tile_definitions::RIVER_TERMINATOR;
 use indexmap::IndexMap;
-use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
-use std::rc::Rc;
 // private val regionIndex: MutableMap<UniqueTileRegion, ConnectedRegion> = mutableMapOf(),
 // private val scoreRecord: MutableList<Map<Player, Int>> = mutableListOf(),
 // private val placedMeeple: MutableMap<PlacedTile, Meeple> = mutableMapOf(),
@@ -30,8 +28,6 @@ pub struct Board {
     connected_regions: HashMap<ConnectedRegionId, ConnectedRegion>,
     region_index: HashMap<PlacedTileEdge, ConnectedRegionId>,
     score_record: Vec<HashMap<Player, u32>>,
-    placed_meeple: HashMap<PlacedTile, Meeple>,
-    liberated_meeple: HashMap<PlacedTile, Meeple>,
     current_score: HashMap<Player, Vec<RegionScore>>,
 }
 
@@ -53,9 +49,8 @@ pub enum InvalidTilePlacement {
 
 #[derive(Debug, Default)]
 pub struct TilePlacementSuccess {
-    score_delta: HashMap<Player, u32>,
-    placed_meeple: Option<Meeple>,
-    liberated_meeple: Vec<Meeple>,
+    pub score_delta: HashMap<Player, u32>,
+    pub liberated_meeple: Vec<Meeple>,
 }
 
 impl Board {
@@ -80,7 +75,6 @@ impl Board {
             let mut region_sequences: HashSet<Vec<RegionType>> = HashSet::new();
 
             (0..4)
-                .into_iter()
                 .filter(move |&rotations| {
                     let region_sequence = tile.list_oriented_region_types(rotations);
 
@@ -130,7 +124,7 @@ impl Board {
     }
 
     pub(crate) fn new_with_tiles(
-        /*players: Vec<Player>, */ tiles: Vec<PlacedTile>,
+         tiles: Vec<PlacedTile>,
     ) -> Result<Self, InvalidTilePlacement> {
         let mut board = Board::default();
 
@@ -154,7 +148,7 @@ impl Board {
         for edge in connected_region.connected_edges.keys() {
             let opposite = edge.opposing_tile_edge();
             if let Some(connected_region_id) = self.region_index.get(&opposite) {
-                regions_to_merge.insert(connected_region_id.clone());
+                regions_to_merge.insert(*connected_region_id);
             }
         }
 
@@ -169,8 +163,10 @@ impl Board {
 
         self.validate_tile_placement(&tile, Some(&tile_connected_regions))?;
 
+        let mut liberated_meeple: Vec<Meeple> = Vec::new();
+
         for mut connected_region in tile_connected_regions {
-            let mut regions_to_merge = self.get_candidate_regions_to_merge(&connected_region);
+            let regions_to_merge = self.get_candidate_regions_to_merge(&connected_region);
 
             for region_id in regions_to_merge {
                 let merge_region = self
@@ -188,18 +184,28 @@ impl Board {
                     .insert(placed_tile_edge.clone(), connected_region.id);
             }
 
+            if connected_region.is_closed() {
+                let resident_tile_coordinates: Vec<_> = connected_region.residents(self).iter().map(|(tile, _, _)|tile.placement.coordinate).collect();
+                for coordinate in resident_tile_coordinates {
+                    let tile = self.placed_tiles.get_mut(&coordinate).expect("should exist");
+                    if let Some((_, meeple)) = tile.meeple.take() {
+                        liberated_meeple.push(meeple);
+                    }
+                }
+            }
+
             self.connected_regions
                 .insert(connected_region.id, connected_region);
+
         }
 
         self.placed_tiles.insert(tile.placement.coordinate, tile);
 
         // @todo implement scoring and meeple tracking in success result
-        Ok(TilePlacementSuccess::default())
-    }
-
-    fn opposing_tile_edge(&self, edge: &PlacedTileEdge) -> Option<PlacedTileEdge> {
-        todo!()
+        Ok(TilePlacementSuccess {
+            liberated_meeple,
+            ..Default::default()
+        })
     }
 
     fn possible_next_tile_coordinates(&self) -> HashSet<BoardCoordinate> {
@@ -315,7 +321,7 @@ impl Board {
             });
 
             for connected_region in meeple_connected_regions {
-                let regions_to_merge = self.get_candidate_regions_to_merge(&connected_region);
+                let regions_to_merge = self.get_candidate_regions_to_merge(connected_region);
                 for region_id in regions_to_merge {
                     let joined_region = self
                         .connected_regions
@@ -395,7 +401,7 @@ impl Board {
                 let lines = if let Some(tile) = self.placed_tiles.get(&coord) {
                     tile.render_to_lines(&style)
                 } else {
-                    vec![std::iter::repeat(' ').take(TILE_WIDTH * 2).collect(); TILE_WIDTH]
+                    vec![" ".repeat(TILE_WIDTH * 2); TILE_WIDTH]
                 };
 
                 for (render_row, render) in lines.iter().enumerate() {
@@ -413,8 +419,8 @@ impl Board {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tile::RegionType::{Field, Road, Water};
-    use crate::tile_definitions::{CORNER_RIVER, CORNER_ROAD, STRAIGHT_RIVER, STRAIGHT_ROAD};
+    use crate::tile::RegionType::{Field, Road};
+    use crate::tile_definitions::{CLOISTER_IN_FIELD, CORNER_RIVER, CORNER_ROAD, STRAIGHT_RIVER, STRAIGHT_ROAD};
 
     #[test]
     fn test_valid_on_first_tile() {
@@ -683,5 +689,29 @@ mod tests {
             res,
             Err(InvalidTilePlacement::OtherMeepleAlreadyInConnectedRegion)
         ))
+    }
+
+    #[test]
+    fn test_meeple_are_liberated_when_region_closes() {
+
+        let mut board = Board::new_with_tiles(vec![
+            PlacedTile::new_with_meeple(&CORNER_ROAD, -1, -1, 0, (RegionIndex::new(1) /* the outer field */, Meeple::dummy())),
+            PlacedTile::new_with_meeple(&STRAIGHT_ROAD, -1, 0, 0, (RegionIndex::new(1) /* the inner field */, Meeple::dummy())),
+            PlacedTile::new(&CORNER_ROAD, -1, 1, 3),
+            PlacedTile::new(&STRAIGHT_ROAD, 0, -1, 1),
+            PlacedTile::new_with_meeple(&CORNER_ROAD, 1, -1, 1, (RegionIndex::new(2) /* the road */, Meeple::dummy())),
+            PlacedTile::new(&STRAIGHT_ROAD, 1, 0, 0),
+            PlacedTile::new(&CORNER_ROAD, 1, 1, 2),
+            PlacedTile::new(&CLOISTER_IN_FIELD, 0, 0, 0),
+        ])
+            .unwrap();
+
+        println!("{}", board.render(RenderStyle::Ascii));
+
+        let result = board.place_tile(PlacedTile::new(&STRAIGHT_ROAD, 0, 1, 1)).expect("should succeed");
+
+        println!("{}", board.render(RenderStyle::Ascii));
+
+        assert_eq!(result.liberated_meeple.len(), 2);
     }
 }

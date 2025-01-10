@@ -1,4 +1,4 @@
-use crate::board::Board;
+use crate::board::{Board, TilePlacementSuccess};
 use crate::deck::Deck;
 use crate::player::Player;
 use crate::tile::{PlacedTile, RenderStyle};
@@ -24,7 +24,7 @@ fn main() {
         .into_iter()
         .map(|p| (p.id, p))
         .collect();
-    let player_ids: Vec<_> = players.keys().map(|id| id.clone()).collect();
+    let player_ids: Vec<_> = players.keys().copied().collect();
     let mut player_id_iter = player_ids.iter().cycle();
 
     let board = Arc::new(RwLock::new(Board::new()));
@@ -81,7 +81,11 @@ fn main() {
 
             // println!("{}", tile.render_to_lines(RenderStyle::TrueColor).join("\n"));
 
-            board.write().unwrap().place_tile(tile).unwrap();
+            let TilePlacementSuccess { liberated_meeple, ..} = board.write().unwrap().place_tile(tile).unwrap();
+
+            for meeple in liberated_meeple {
+                players.get_mut(&meeple.player_id).expect("should exist").meeple.push(meeple);
+            }
         } else {
             eprintln!("no move hints?")
         }

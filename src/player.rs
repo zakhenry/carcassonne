@@ -1,4 +1,3 @@
-use crate::tile::PlacedTile;
 use std::ops::Deref;
 use uuid::Uuid;
 
@@ -75,7 +74,7 @@ impl Deref for RegionIndex {
 #[derive(Debug, Clone)]
 pub struct Meeple {
     pub(crate) color: MeepleColor,
-    player_id: PlayerId,
+    pub(crate) player_id: PlayerId,
 }
 
 impl Meeple {

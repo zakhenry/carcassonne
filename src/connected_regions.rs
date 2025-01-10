@@ -3,11 +3,9 @@
 use crate::board::Board;
 use crate::player::{Meeple, PlayerId, RegionIndex};
 use crate::tile::{
-    BoardCoordinate, CardinalDirection, PlacedTile, Region, RegionType, TileCoordinate,
+    BoardCoordinate, CardinalDirection, PlacedTile, Region, RegionType,
 };
-use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
-use std::rc::Rc;
 use uuid::Uuid;
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone)]
@@ -67,6 +65,7 @@ pub(crate) enum ConnectedRegionMergeFailure {
     EmptyCollection,
 }
 
+
 impl ConnectedRegion {
     pub(crate) fn merge_mut(
         &mut self,
@@ -92,7 +91,7 @@ impl ConnectedRegion {
         Ok(self)
     }
 
-    pub(crate) fn residents<'a>(&self, board: &'a Board) -> Vec<&'a Meeple> {
+    pub(crate) fn residents<'a>(&self, board: &'a Board) -> Vec<(&'a PlacedTile, &'a RegionIndex, &'a Meeple)> {
         self.tile_regions
             .iter()
             .filter_map(|r| {
@@ -102,7 +101,7 @@ impl ConnectedRegion {
             })
             .filter_map(|(tile, region_index)| match &tile.meeple {
                 Some((meeple_region_index, meeple)) if &region_index == meeple_region_index => {
-                    Some(meeple)
+                    Some((tile, meeple_region_index, meeple))
                 }
                 _ => None,
             })
@@ -144,17 +143,15 @@ impl ConnectedRegionCollection for Vec<ConnectedRegion> {
 mod tests {
     use crate::board::Board;
     use crate::connected_regions::{
-        ConnectedRegion, ConnectedRegionCollection, ConnectedRegionMergeFailure, PlacedTileEdge,
-        PlacedTileRegion,
+        ConnectedRegion, ConnectedRegionCollection, ConnectedRegionMergeFailure, PlacedTileEdge
+        ,
     };
-    use crate::player::{Player, RegionIndex};
     use crate::tile::CardinalDirection::{EastSouthEast, WestSouthWest};
     use crate::tile::RegionType::{City, Cloister, Field, Road};
     use crate::tile::{BoardCoordinate, PlacedTile, RegionType, RenderStyle};
     use crate::tile_definitions::{
         CLOISTER_IN_FIELD, CORNER_ROAD, CROSS_INTERSECTION, STRAIGHT_ROAD, THREE_SIDED_CITY,
     };
-    use std::collections::HashSet;
     use uuid::Uuid;
 
     #[test]
@@ -165,8 +162,7 @@ mod tests {
 
         let road_region = regions
             .iter()
-            .filter(|r| r.region_type == Road)
-            .next()
+            .find(|r| r.region_type == Road)
             .expect("should exist");
         assert_eq!(road_region.adjacent_regions.len(), 2);
 
@@ -223,15 +219,13 @@ mod tests {
         let mut test_region = PlacedTile::new(&CLOISTER_IN_FIELD, 0, 0, 0)
             .own_connected_regions()
             .into_iter()
-            .filter(|r| r.region_type == Field)
-            .next()
+            .find(|r| r.region_type == Field)
             .expect("should exist");
 
         let other_region = PlacedTile::new(&THREE_SIDED_CITY, 0, 1, 0)
             .own_connected_regions()
             .into_iter()
-            .filter(|r| r.region_type == Field)
-            .next()
+            .find(|r| r.region_type == Field)
             .expect("should exist");
 
         let merge_result = test_region
@@ -264,7 +258,7 @@ mod tests {
     fn assert_connected_regions(
         placed_tiles: &[PlacedTile],
         expectation: &[(RegionType, bool)],
-    ) -> () {
+    ) {
         let board = Board::new_with_tiles(placed_tiles.to_vec()).unwrap();
 
         println!("{}", board.render(RenderStyle::Ascii));

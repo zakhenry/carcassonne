@@ -1,9 +1,9 @@
 use crate::connected_regions::{
     ConnectedRegion, ConnectedRegionId, PlacedTileEdge, PlacedTileRegion,
 };
-use crate::player::{Meeple, MeepleColor, Player, RegionIndex};
-use crate::tile_definitions::{CLOISTER_IN_FIELD, RIVER_TERMINATOR};
-use colored::{Color, ColoredString, Colorize};
+use crate::player::{Meeple, MeepleColor, RegionIndex};
+use crate::tile_definitions::RIVER_TERMINATOR;
+use colored::{Color, Colorize};
 use std::cmp::PartialEq;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::Debug;
@@ -28,7 +28,7 @@ impl TileCoordinate {
             0 => self.clone(),                                                // No rotation
             1 => Self::new(TILE_WIDTH - 1 - self.y, self.x), // 90 degrees clockwise
             2 => Self::new(TILE_WIDTH - 1 - self.x, TILE_WIDTH - 1 - self.y), // 180 degrees
-            3 => Self::new(self.y, (TILE_WIDTH - 1 - self.x)), // 270 degrees clockwise
+            3 => Self::new(self.y, TILE_WIDTH - 1 - self.x), // 270 degrees clockwise
             _ => unreachable!(),                             // This branch is logically unreachable
         }
     }
@@ -79,7 +79,7 @@ impl BoardCoordinate {
         BTreeMap::from_iter(
             PRIMARY_CARDINAL_DIRECTIONS
                 .iter()
-                .map(|d| (d.clone(), self.adjacent_in_direction(d))),
+                .map(|d| (*d, self.adjacent_in_direction(d))),
         )
     }
 }
@@ -116,7 +116,7 @@ pub(crate) enum CardinalDirection {
 // @todo the methods here are jank or verbose, and there are almost certainly better approaches.
 impl CardinalDirection {
     pub(crate) fn rotate(&self, n: usize) -> Self {
-        PERIMETER_REGION_DIRECTIONS
+        *PERIMETER_REGION_DIRECTIONS
             .iter()
             .cycle()
             .skip(
@@ -129,7 +129,6 @@ impl CardinalDirection {
             .take(1)
             .next()
             .expect("should have a field")
-            .clone()
     }
 
     pub(crate) fn adjacent(&self) -> (Self, Self) {
@@ -418,7 +417,11 @@ impl RenderCell {
         } else if column_idx == TILE_WIDTH - 1 {
             "┃"
         } else {
-            self.ascii_code()
+            if meeple.is_some() {
+                "ꆜ "
+            } else {
+                self.ascii_code()
+            }
         }
         .to_string()
     }
@@ -597,6 +600,14 @@ impl PlacedTile {
         }
     }
 
+    pub(crate) fn new_with_meeple(tile: &'static TileDefinition, x: i8, y: i8, rotations: u8, meeple_placement: (RegionIndex, Meeple)) -> Self {
+        let mut tile = Self::new(tile, x, y, rotations);
+
+        tile.meeple = Some(meeple_placement);
+
+        tile
+    }
+
     pub(crate) fn own_connected_regions(&self) -> Vec<ConnectedRegion> {
         let regions = self.list_placed_tile_regions();
 
@@ -636,7 +647,7 @@ impl PlacedTile {
                         .region
                         .edges()
                         .iter()
-                        .map(|d| (d.clone(), connected_region.id))
+                        .map(|d| (*d, connected_region.id))
                 })
             })
             .collect();
@@ -651,10 +662,9 @@ impl PlacedTile {
             {
                 let (left, right) = edge.adjacent();
                 for adjacent in [left, right] {
-                    let connected_region_id = edge_index
+                    let connected_region_id = *edge_index
                         .get(&adjacent)
-                        .expect("all edges should be indexed")
-                        .clone();
+                        .expect("all edges should be indexed");
                     if connected_region_id != connected_region.id {
                         connected_region
                             .adjacent_regions
@@ -679,8 +689,7 @@ impl PlacedTile {
             .tile
             .regions
             .iter()
-            .filter(|r| matches!(r, Region::Water { .. }))
-            .next()
+            .find(|r| matches!(r, Region::Water { .. }))
             .expect("should be river tile");
 
         let rotated_edges: Vec<_> = region
@@ -690,7 +699,7 @@ impl PlacedTile {
             .collect();
         assert_eq!(rotated_edges.len(), 2);
 
-        rotated_edges.into_iter().filter(|&e| e != direction).next()
+        rotated_edges.into_iter().find(|&e| e != direction)
     }
 
     pub(crate) fn list_regions_on_edge(
@@ -775,10 +784,10 @@ impl PlacedTile {
 pub(crate) struct TileRenderRepresentation(pub [[RenderCell; 7]; 7]);
 
 impl TileRenderRepresentation {
-    pub(crate) fn rotated<'a>(
-        &'a self,
+    pub(crate) fn rotated(
+        &self,
         rotations: u8,
-    ) -> impl Iterator<Item = impl Iterator<Item = &'a RenderCell>> + 'a {
+    ) -> impl Iterator<Item = impl Iterator<Item = &RenderCell>> {
         let rotations = rotations % 4; // Normalize rotations to 0..3
 
         (0..TILE_WIDTH).map(move |r| {

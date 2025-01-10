@@ -106,7 +106,7 @@ impl Iterator for RiverTileSequence {
             return None;
         }
 
-        let mut tile = self.tiles.pop();
+        let tile = self.tiles.pop();
 
         if tile.is_none() {
             self.river_exhausted = true;
