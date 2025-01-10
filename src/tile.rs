@@ -82,6 +82,18 @@ impl BoardCoordinate {
                 .map(|d| (*d, self.adjacent_in_direction(d))),
         )
     }
+
+    pub(crate) fn surrounding_coordinates(&self) -> Vec<BoardCoordinate> {
+        (-1..=1).flat_map(|x|{
+            (-1..=1).filter_map(move |y|{
+                if x == 0 && y == 0 {
+                    None
+                } else {
+                    Some(BoardCoordinate { x: self.x + x, y: self.y + y })
+                }
+            })
+        }).collect()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -608,6 +620,20 @@ impl PlacedTile {
         tile
     }
 
+    pub(crate) fn has_occupied_cloister(&self) -> bool {
+
+        if let Some((meeple_index, _)) = self.meeple {
+            if let Some(cloister_index) = self.tile.regions.iter().enumerate().find_map(|(index, r)|if let Region::Cloister {..} = r { Some(index)} else {None}) {
+                cloister_index == *meeple_index
+            } else {
+                false
+            }
+
+        } else {
+            false
+        }
+    }
+
     pub(crate) fn own_connected_regions(&self) -> Vec<ConnectedRegion> {
         let regions = self.list_placed_tile_regions();
 
@@ -901,6 +927,22 @@ mod tests {
     fn test_direction_to_adjacent_coordinate_panics_on_non_adjacent() {
         BoardCoordinate { x: 0, y: 0 }
             .direction_to_adjacent_coordinate(BoardCoordinate { x: 1, y: 1 });
+    }
+
+    #[test]
+    fn test_generates_surrounding_coordinates() {
+        let coordinates = BoardCoordinate { x: 2, y: 2 }.surrounding_coordinates();
+
+        assert_eq!(coordinates, vec![
+            BoardCoordinate { x: 1, y: 1 },
+            BoardCoordinate { x: 1, y: 2 },
+            BoardCoordinate { x: 1, y: 3 },
+            BoardCoordinate { x: 2, y: 1 },
+            BoardCoordinate { x: 2, y: 3 },
+            BoardCoordinate { x: 3, y: 1 },
+            BoardCoordinate { x: 3, y: 2 },
+            BoardCoordinate { x: 3, y: 3 }
+        ]);
     }
 
     #[test]

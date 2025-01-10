@@ -27,7 +27,7 @@ impl PlacedTileEdge {
 
 #[derive(Debug)]
 pub(crate) struct PlacedTileRegion {
-    tile_position: BoardCoordinate, // this is used to look up the placed tile in the board index
+    pub(crate) tile_position: BoardCoordinate, // this is used to look up the placed tile in the board index
     pub(crate) region_index: RegionIndex,
     pub(crate) region: &'static Region,
 }
