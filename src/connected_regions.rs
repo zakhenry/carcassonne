@@ -1,12 +1,14 @@
 // data class UniqueTileRegion(val tileId: UUID, val regionIndex: Int, val region: Region, val edgeless: Boolean)
 
-use std::cell::RefCell;
+use crate::board::Board;
 use crate::player::{Meeple, PlayerId, RegionIndex};
-use crate::tile::{BoardCoordinate, CardinalDirection, PlacedTile, Region, RegionType, TileCoordinate};
+use crate::tile::{
+    BoardCoordinate, CardinalDirection, PlacedTile, Region, RegionType, TileCoordinate,
+};
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use uuid::Uuid;
-use crate::board::Board;
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub(crate) struct PlacedTileEdge {
@@ -15,14 +17,14 @@ pub(crate) struct PlacedTileEdge {
 }
 
 impl PlacedTileEdge {
-
     pub(crate) fn opposing_tile_edge(&self) -> PlacedTileEdge {
         PlacedTileEdge {
-            coordinate: self.coordinate.adjacent_in_direction(&self.global_direction),
-            global_direction: self.global_direction.tile_opposite()
+            coordinate: self
+                .coordinate
+                .adjacent_in_direction(&self.global_direction),
+            global_direction: self.global_direction.tile_opposite(),
         }
     }
-
 }
 
 #[derive(Debug)]
@@ -56,7 +58,7 @@ pub(crate) struct ConnectedRegion {
     pub(crate) region_type: RegionType,
     pub(crate) tile_regions: Vec<PlacedTileRegion>,
     pub(crate) adjacent_regions: HashSet<ConnectedRegionId>,
-    pub(crate) connected_edges: HashMap<PlacedTileEdge, Option<PlacedTileEdge>>
+    pub(crate) connected_edges: HashMap<PlacedTileEdge, Option<PlacedTileEdge>>,
 }
 
 #[derive(Debug)]
@@ -65,11 +67,11 @@ pub(crate) enum ConnectedRegionMergeFailure {
     EmptyCollection,
 }
 
-
 impl ConnectedRegion {
-
-
-    pub(crate) fn merge_mut(&mut self, other: Self) -> Result<&mut Self, ConnectedRegionMergeFailure> {
+    pub(crate) fn merge_mut(
+        &mut self,
+        other: Self,
+    ) -> Result<&mut Self, ConnectedRegionMergeFailure> {
         if self.region_type != other.region_type {
             return Err(ConnectedRegionMergeFailure::RegionTypeMismatch);
         }
@@ -78,7 +80,6 @@ impl ConnectedRegion {
         self.adjacent_regions.extend(other.adjacent_regions);
 
         for (own_edge, foreign_edge) in other.connected_edges {
-
             let opposite = own_edge.opposing_tile_edge();
 
             if self.connected_edges.contains_key(&opposite) {
@@ -86,25 +87,30 @@ impl ConnectedRegion {
             } else {
                 self.connected_edges.insert(own_edge, foreign_edge);
             }
-
         }
 
         Ok(self)
     }
 
     pub(crate) fn residents<'a>(&self, board: &'a Board) -> Vec<&'a Meeple> {
-        self.tile_regions.iter().filter_map(|r|{
-
-            board.get_tile_at_coordinate(&r.tile_position).map(|tile|(tile, r.region_index))
-
-        }).filter_map(|(tile, region_index)|match &tile.meeple {
-            Some((meeple_region_index, meeple)) if &region_index == meeple_region_index => Some(meeple),
-            _ => None
-        }).collect()
+        self.tile_regions
+            .iter()
+            .filter_map(|r| {
+                board
+                    .get_tile_at_coordinate(&r.tile_position)
+                    .map(|tile| (tile, r.region_index))
+            })
+            .filter_map(|(tile, region_index)| match &tile.meeple {
+                Some((meeple_region_index, meeple)) if &region_index == meeple_region_index => {
+                    Some(meeple)
+                }
+                _ => None,
+            })
+            .collect()
     }
 
     pub(crate) fn is_closed(&self) -> bool {
-        self.connected_edges.values().all(|e|e.is_some())
+        self.connected_edges.values().all(|e| e.is_some())
     }
 
     pub(crate) fn score(&self) -> HashMap<PlayerId, u32> {
@@ -122,7 +128,7 @@ impl ConnectedRegionCollection for Vec<ConnectedRegion> {
 
         let mut acc = match iter.next() {
             Some(first) => first,
-            None => return Err(ConnectedRegionMergeFailure::EmptyCollection)
+            None => return Err(ConnectedRegionMergeFailure::EmptyCollection),
         };
 
         // Fold the remaining items
@@ -134,51 +140,58 @@ impl ConnectedRegionCollection for Vec<ConnectedRegion> {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use crate::board::Board;
+    use crate::connected_regions::{
+        ConnectedRegion, ConnectedRegionCollection, ConnectedRegionMergeFailure, PlacedTileEdge,
+        PlacedTileRegion,
+    };
     use crate::player::{Player, RegionIndex};
-    use crate::tile::RegionType::{Cloister, Field, Road, City};
+    use crate::tile::CardinalDirection::{EastSouthEast, WestSouthWest};
+    use crate::tile::RegionType::{City, Cloister, Field, Road};
     use crate::tile::{BoardCoordinate, PlacedTile, RegionType, RenderStyle};
-    use crate::tile_definitions::{CLOISTER_IN_FIELD, CORNER_ROAD, CROSS_INTERSECTION, STRAIGHT_ROAD, THREE_SIDED_CITY};
+    use crate::tile_definitions::{
+        CLOISTER_IN_FIELD, CORNER_ROAD, CROSS_INTERSECTION, STRAIGHT_ROAD, THREE_SIDED_CITY,
+    };
     use std::collections::HashSet;
     use uuid::Uuid;
-    use crate::connected_regions::{ConnectedRegion, ConnectedRegionCollection, ConnectedRegionMergeFailure, PlacedTileEdge, PlacedTileRegion};
-    use crate::tile::CardinalDirection::{EastSouthEast, WestSouthWest};
 
     #[test]
     fn should_derive_adjacent_regions() {
-
         let regions = PlacedTile::new(&STRAIGHT_ROAD, 0, 0, 0).own_connected_regions();
 
         assert_eq!(regions.len(), 3);
 
-        let road_region = regions.iter().filter(|r|r.region_type == Road).next().expect("should exist");
+        let road_region = regions
+            .iter()
+            .filter(|r| r.region_type == Road)
+            .next()
+            .expect("should exist");
         assert_eq!(road_region.adjacent_regions.len(), 2);
 
-        let field_regions: Vec<_> = regions.iter().filter(|r|r.region_type == Field).collect();
+        let field_regions: Vec<_> = regions.iter().filter(|r| r.region_type == Field).collect();
         assert_eq!(field_regions.len(), 2);
 
         for field_region in field_regions {
             assert_eq!(field_region.adjacent_regions.len(), 1);
         }
-
     }
 
     #[test]
     fn opposing_tile_edge_should_give_adjacent_edge_position() {
-
         let edge = PlacedTileEdge {
             coordinate: BoardCoordinate::new(0, 0),
-            global_direction: EastSouthEast
+            global_direction: EastSouthEast,
         };
 
-        assert_eq!(edge.opposing_tile_edge(), PlacedTileEdge {
-            coordinate: BoardCoordinate::new(1, 0),
-            global_direction: WestSouthWest
-        })
-
+        assert_eq!(
+            edge.opposing_tile_edge(),
+            PlacedTileEdge {
+                coordinate: BoardCoordinate::new(1, 0),
+                global_direction: WestSouthWest
+            }
+        )
     }
 
     #[test]
@@ -199,39 +212,62 @@ mod tests {
             connected_edges: Default::default(),
         });
 
-        assert!(matches!(merge_result, Err(ConnectedRegionMergeFailure::RegionTypeMismatch)))
+        assert!(matches!(
+            merge_result,
+            Err(ConnectedRegionMergeFailure::RegionTypeMismatch)
+        ))
     }
 
     #[test]
     fn should_merge_connected_regions() {
+        let mut test_region = PlacedTile::new(&CLOISTER_IN_FIELD, 0, 0, 0)
+            .own_connected_regions()
+            .into_iter()
+            .filter(|r| r.region_type == Field)
+            .next()
+            .expect("should exist");
 
-        let mut test_region = PlacedTile::new(&CLOISTER_IN_FIELD, 0, 0, 0).own_connected_regions()
-            .into_iter().filter(|r| r.region_type == Field).next().expect("should exist");
+        let other_region = PlacedTile::new(&THREE_SIDED_CITY, 0, 1, 0)
+            .own_connected_regions()
+            .into_iter()
+            .filter(|r| r.region_type == Field)
+            .next()
+            .expect("should exist");
 
-        let other_region = PlacedTile::new(&THREE_SIDED_CITY, 0, 1, 0).own_connected_regions()
-            .into_iter().filter(|r| r.region_type == Field).next().expect("should exist");
-
-        let merge_result = test_region.merge_mut(other_region).expect("should merge ok");
+        let merge_result = test_region
+            .merge_mut(other_region)
+            .expect("should merge ok");
 
         assert_eq!(merge_result.tile_regions.len(), 2)
     }
 
     #[test]
     fn should_merge_connected_region_collection() {
-        let mut collection: Vec<_> = PlacedTile::new(&STRAIGHT_ROAD, 0, 0, 0).own_connected_regions()
-            .into_iter().filter(|r| r.region_type == Field).collect();
+        let mut collection: Vec<_> = PlacedTile::new(&STRAIGHT_ROAD, 0, 0, 0)
+            .own_connected_regions()
+            .into_iter()
+            .filter(|r| r.region_type == Field)
+            .collect();
 
-        collection.extend(PlacedTile::new(&STRAIGHT_ROAD, 1, 0, 0).own_connected_regions().into_iter().filter(|r| r.region_type == Field));
+        collection.extend(
+            PlacedTile::new(&STRAIGHT_ROAD, 1, 0, 0)
+                .own_connected_regions()
+                .into_iter()
+                .filter(|r| r.region_type == Field),
+        );
 
         let merge_result = collection.merge_all().expect("should succeed");
 
         assert_eq!(merge_result.tile_regions.len(), 4)
     }
 
-    fn assert_connected_regions(placed_tiles: &[PlacedTile], expectation: &[(RegionType, bool)]) -> () {
+    fn assert_connected_regions(
+        placed_tiles: &[PlacedTile],
+        expectation: &[(RegionType, bool)],
+    ) -> () {
         let board = Board::new_with_tiles(placed_tiles.to_vec()).unwrap();
 
-        println!("{}",board.render(RenderStyle::Ascii));
+        println!("{}", board.render(RenderStyle::Ascii));
 
         let connected_regions = board.get_connected_regions();
 
@@ -239,7 +275,10 @@ mod tests {
         //     println!("{:?} {}", region.region_type, region.is_closed());
         // }
 
-        let mut region_types: Vec<_> = connected_regions.into_iter().map(|r| (r.region_type.clone(), r.is_closed())).collect();
+        let mut region_types: Vec<_> = connected_regions
+            .into_iter()
+            .map(|r| (r.region_type.clone(), r.is_closed()))
+            .collect();
 
         let mut test = Vec::from_iter(expectation.iter().cloned());
 
@@ -257,7 +296,12 @@ mod tests {
                 PlacedTile::new(&CLOISTER_IN_FIELD, 1, 0, 0),
                 PlacedTile::new(&CLOISTER_IN_FIELD, 1, 1, 0),
             ],
-            &[(Cloister, true), (Cloister, true), (Cloister, true), (Field, false)],
+            &[
+                (Cloister, true),
+                (Cloister, true),
+                (Cloister, true),
+                (Field, false),
+            ],
         )
     }
 
@@ -286,7 +330,12 @@ mod tests {
                 PlacedTile::new(&STRAIGHT_ROAD, 0, 1, 1),
                 PlacedTile::new(&CLOISTER_IN_FIELD, 0, 0, 0),
             ],
-            &[(Cloister, true), (Field, true), (Field, false), (Road, true)],
+            &[
+                (Cloister, true),
+                (Field, true),
+                (Field, false),
+                (Road, true),
+            ],
         )
     }
 
@@ -303,7 +352,13 @@ mod tests {
                 PlacedTile::new(&CORNER_ROAD, 1, 1, 2),
                 PlacedTile::new(&STRAIGHT_ROAD, 0, 1, 1),
             ],
-            &[(Field, false), (Field, false),( Road, false),( Road, false), (Road, true)],
+            &[
+                (Field, false),
+                (Field, false),
+                (Road, false),
+                (Road, false),
+                (Road, true),
+            ],
         )
     }
 }

@@ -1,5 +1,5 @@
-use std::ops::Deref;
 use crate::tile::PlacedTile;
+use std::ops::Deref;
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]
@@ -82,14 +82,14 @@ impl Meeple {
     fn new(player: &Player, color: MeepleColor) -> Self {
         Self {
             player_id: player.id,
-            color
+            color,
         }
     }
 
     pub(crate) fn dummy() -> Self {
         Self {
             player_id: Uuid::nil(),
-            color: MeepleColor::Black
+            color: MeepleColor::Black,
         }
     }
 }
