@@ -372,37 +372,6 @@ pub(crate) enum RenderCell {
     Corner, // @todo remove?
 }
 
-impl MeepleColor {
-    fn render_color(&self, style: &RenderStyle) -> Color {
-        match (self, style) {
-            (MeepleColor::Red, RenderStyle::Ascii | RenderStyle::Ansi) => Color::Red,
-            (MeepleColor::Green, RenderStyle::Ascii | RenderStyle::Ansi) => Color::Green,
-            (MeepleColor::Blue, RenderStyle::Ascii | RenderStyle::Ansi) => Color::Blue,
-            (MeepleColor::Black, RenderStyle::Ascii | RenderStyle::Ansi) => Color::Black,
-
-            (MeepleColor::Red, RenderStyle::TrueColor) => Color::TrueColor {
-                r: 194,
-                g: 0,
-                b: 25,
-            },
-            (MeepleColor::Green, RenderStyle::TrueColor) => Color::TrueColor {
-                r: 16,
-                g: 126,
-                b: 50,
-            },
-            (MeepleColor::Blue, RenderStyle::TrueColor) => Color::TrueColor {
-                r: 10,
-                g: 79,
-                b: 147,
-            },
-            (MeepleColor::Black, RenderStyle::TrueColor) => Color::TrueColor {
-                r: 43,
-                g: 42,
-                b: 44,
-            },
-        }
-    }
-}
 
 impl RenderCell {
     fn ascii_code(&self) -> &'static str {

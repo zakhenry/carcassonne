@@ -1,11 +1,12 @@
 use crate::connected_regions::{
     ConnectedRegion, ConnectedRegionId, PlacedTileEdge,
 };
-use crate::player::{Meeple, Player, RegionIndex};
+use crate::player::{Meeple, Player, PlayerId, RegionIndex};
 use crate::tile::{BoardCoordinate, CardinalDirection, PlacedTile, Region, RegionType, RenderStyle, TileDefinition, TilePlacement, TILE_WIDTH};
 use crate::tile_definitions::RIVER_TERMINATOR;
 use indexmap::IndexMap;
 use std::collections::{HashMap, HashSet};
+use crate::score::Score;
 
 #[derive(Debug)]
 struct RegionScore {
@@ -43,7 +44,7 @@ pub enum InvalidTilePlacement {
 
 #[derive(Debug, Default)]
 pub struct TilePlacementSuccess {
-    pub score_delta: HashMap<Player, u32>,
+    pub score_delta: Score,
     pub liberated_meeple: Vec<Meeple>,
 }
 
@@ -53,6 +54,13 @@ impl Board {
         coordinate: &BoardCoordinate,
     ) -> Option<&PlacedTile> {
         self.placed_tiles.get(coordinate)
+    }
+
+    pub(crate) fn get_connected_region(
+        &self,
+        id: &ConnectedRegionId,
+    ) -> Option<&ConnectedRegion> {
+        self.connected_regions.get(id)
     }
 
     pub(crate) fn get_move_hints(
@@ -148,6 +156,7 @@ impl Board {
         self.validate_tile_placement(&tile, Some(&tile_connected_regions))?;
 
         let mut liberated_meeple: Vec<Meeple> = Vec::new();
+        let mut score_delta = Score::new();
 
         for mut connected_region in tile_connected_regions {
             let regions_to_merge = self.get_candidate_regions_to_merge(&connected_region);
@@ -164,6 +173,9 @@ impl Board {
 
             if connected_region.is_closed() {
                 let resident_tile_coordinates: Vec<_> = connected_region.residents(self).iter().map(|(tile, _, _)| tile.placement.coordinate).collect();
+
+                let mut liberated_meeple_for_region = Vec::new();
+
                 for coordinate in resident_tile_coordinates {
                     let tile = self.placed_tiles.get_mut(&coordinate).expect("should exist");
 
@@ -172,12 +184,18 @@ impl Board {
 
                             if let Some((_, meeple)) = tile.meeple.take() {
                                 assert_ne!(&connected_region.region_type, &RegionType::Water, "meeple shouldn't need to be liberated from the river. something has gone horribly wrong!");
-                                liberated_meeple.push(meeple);
+                                liberated_meeple_for_region.push(meeple);
                             }
                         }
                     }
 
                 }
+
+                if let Some(winning_player) = connected_region.majority_meeple_player_id(self) {
+                    score_delta.add_score(winning_player, connected_region.score(self))
+                }
+
+                liberated_meeple.extend(liberated_meeple_for_region);
             }
 
             self.connected_regions.insert(connected_region.id, connected_region);
@@ -201,16 +219,32 @@ impl Board {
         for coordinate in adjacent_closed_priest_tile_coordinates {
             let tile = self.placed_tiles.get_mut(&coordinate).expect("should exist");
             if let Some((_, meeple)) = tile.meeple.take() {
+                score_delta.add_score(meeple.player_id, 8);
                 liberated_meeple.push(meeple);
-
             }
         }
+
 
         // @todo implement scoring and meeple tracking in success result
         Ok(TilePlacementSuccess {
             liberated_meeple,
-            ..Default::default()
+            score_delta
         })
+    }
+
+    /// Note this finds the score of the current board state; it ignores any previous score delta
+    /// caused by meeple being liberated
+    pub fn calculate_board_score(&self) -> Score {
+        let mut score_delta = Score::new();
+
+        for (_, connected_region) in &self.connected_regions {
+            if let Some(winning_player) = connected_region.majority_meeple_player_id(self) {
+                score_delta.add_score(winning_player, connected_region.score(self));
+            }
+        }
+
+        score_delta
+
     }
 
     fn possible_next_tile_coordinates(&self) -> HashSet<BoardCoordinate> {
@@ -364,7 +398,7 @@ impl Board {
         self.connected_regions.values().collect()
     }
 
-    pub(crate) fn render(&self, style: RenderStyle) -> String {
+    pub(crate) fn render(&self, style: &RenderStyle) -> String {
         if self.placed_tiles.is_empty() {
             return "[Empty board]".to_string();
         }

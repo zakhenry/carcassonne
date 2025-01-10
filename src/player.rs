@@ -1,5 +1,7 @@
 use std::ops::Deref;
+use colored::Color;
 use uuid::Uuid;
+use crate::tile::RenderStyle;
 
 #[derive(Debug, Clone)]
 pub(crate) enum MeepleColor {
@@ -7,6 +9,45 @@ pub(crate) enum MeepleColor {
     Green,
     Blue,
     Black,
+    Yellow,
+}
+
+impl MeepleColor {
+    pub(crate) fn render_color(&self, style: &RenderStyle) -> Color {
+        match (self, style) {
+            (MeepleColor::Red, RenderStyle::Ascii | RenderStyle::Ansi) => Color::Red,
+            (MeepleColor::Green, RenderStyle::Ascii | RenderStyle::Ansi) => Color::Green,
+            (MeepleColor::Blue, RenderStyle::Ascii | RenderStyle::Ansi) => Color::Blue,
+            (MeepleColor::Black, RenderStyle::Ascii | RenderStyle::Ansi) => Color::Black,
+            (MeepleColor::Yellow, RenderStyle::Ascii | RenderStyle::Ansi) => Color::BrightYellow,
+
+            (MeepleColor::Red, RenderStyle::TrueColor) => Color::TrueColor {
+                r: 194,
+                g: 0,
+                b: 25,
+            },
+            (MeepleColor::Green, RenderStyle::TrueColor) => Color::TrueColor {
+                r: 16,
+                g: 126,
+                b: 50,
+            },
+            (MeepleColor::Blue, RenderStyle::TrueColor) => Color::TrueColor {
+                r: 10,
+                g: 79,
+                b: 147,
+            },
+            (MeepleColor::Black, RenderStyle::TrueColor) => Color::TrueColor {
+                r: 43,
+                g: 42,
+                b: 44,
+            },
+            (MeepleColor::Yellow, RenderStyle::TrueColor) => Color::TrueColor {
+                r: 215,
+                g: 184,
+                b: 18,
+            },
+        }
+    }
 }
 
 pub type PlayerId = Uuid;
@@ -16,8 +57,9 @@ const MEEPLE_COUNT: usize = 7;
 #[derive(Debug)]
 pub struct Player {
     pub(crate) id: PlayerId,
-    name: Option<String>,
+    pub(crate) name: Option<String>,
     pub(crate) meeple: Vec<Meeple>,
+    pub(crate) meeple_color: MeepleColor
 }
 
 impl Player {
@@ -28,6 +70,7 @@ impl Player {
             id: PlayerId::new_v4(),
             name: None,
             meeple,
+            meeple_color: color.clone(),
         };
 
         for _ in 0..MEEPLE_COUNT {
@@ -51,6 +94,10 @@ impl Player {
 
     pub(crate) fn blue() -> Self {
         Self::new(MeepleColor::Blue)
+    }
+
+    pub(crate) fn yellow() -> Self {
+        Self::new(MeepleColor::Yellow)
     }
 }
 

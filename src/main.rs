@@ -8,6 +8,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::{Arc, RwLock};
+use crate::score::Score;
 
 mod board;
 mod connected_regions;
@@ -16,17 +17,26 @@ mod game_logic;
 mod player;
 mod tile;
 mod tile_definitions;
+mod score;
 
 fn main() {
     let rng = Rc::new(RefCell::new(StdRng::from_entropy()));
 
-    let mut players: HashMap<_, _> = vec![Player::blue(), Player::red()]
+    let mut alice = Player::blue();
+    alice.name = Some("Alice".to_string());
+    let mut bob = Player::red();
+    bob.name = Some("Bob".to_string());
+
+    let render_style = RenderStyle::TrueColor;
+
+    let mut players: HashMap<_, _> = vec![alice, bob]
         .into_iter()
         .map(|p| (p.id, p))
         .collect();
     let player_ids: Vec<_> = players.keys().copied().collect();
     let mut player_id_iter = player_ids.iter().cycle();
 
+    let mut score = Score::new();
     let board = Arc::new(RwLock::new(Board::new()));
 
     let board_clone = Arc::clone(&board);
@@ -81,13 +91,15 @@ fn main() {
 
             // println!("{}", tile.render_to_lines(RenderStyle::TrueColor).join("\n"));
 
-            let TilePlacementSuccess { liberated_meeple, ..} = board.write().unwrap().place_tile(tile).unwrap();
+            let TilePlacementSuccess { liberated_meeple, score_delta } = board.write().unwrap().place_tile(tile).unwrap();
+
+            score.add_delta(&score_delta);
 
             for meeple in liberated_meeple {
                 players.get_mut(&meeple.player_id).expect("should exist").meeple.push(meeple);
             }
         } else {
-            eprintln!("no move hints?")
+            panic!("no move hints?")
         }
     }
 
@@ -96,5 +108,10 @@ fn main() {
         board.read().unwrap().placed_tile_count()
     );
 
-    println!("{}", board.read().unwrap().render(RenderStyle::TrueColor));
+    let board_score = board.read().unwrap().calculate_board_score();
+
+    score.add_delta(&board_score);
+
+    println!("{}", board.read().unwrap().render(&render_style));
+    println!("Final score is:\n{}", score.render(&players, &render_style));
 }

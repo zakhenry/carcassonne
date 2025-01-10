@@ -112,8 +112,62 @@ impl ConnectedRegion {
         self.connected_edges.values().all(|e| e.is_some())
     }
 
-    pub(crate) fn score(&self) -> HashMap<PlayerId, u32> {
-        todo!()
+    pub(crate) fn score(&self, board: &Board) -> u32 {
+        match self.region_type {
+            RegionType::City => {
+
+                let base_score = self.tile_regions.iter().map(|region| match region.region {
+                    Region:: City { pennant: true, .. } => 2,
+                    Region:: City { pennant: false, .. } => 1,
+                    _ => unreachable!()
+                }).sum();
+
+                if self.is_closed() {
+                    base_score * 2
+                } else {
+                    base_score
+                }
+
+            },
+            RegionType::Field => {
+
+                let adjacent_closed_city_count = self.adjacent_regions.iter().filter(|&connected_region_id|{
+                    if let Some(region) = board.get_connected_region(connected_region_id) {
+                        region.region_type == RegionType::City && region.is_closed()
+                    } else {
+                        false
+                    }
+                }).count();
+
+                (adjacent_closed_city_count * 3) as u32
+
+            },
+            RegionType::Cloister => {
+
+                assert_eq!(self.tile_regions.len(), 1);
+                let cloister_coordinate = self.tile_regions.iter().map(|r|r.tile_position).next().expect("there should be one");
+
+                let adjacent_count = board.list_surrounding_tiles(&cloister_coordinate).len();
+
+                adjacent_count as u32
+            },
+            RegionType::Road => self.tile_regions.len() as u32,
+            RegionType::Water => 0
+        }
+    }
+
+    pub(crate) fn majority_meeple_player_id(&self, board: &Board) -> Option<PlayerId> {
+
+        let mut counts = HashMap::new();
+
+        for player_id in self.residents(board).iter().map(|(_, _, &ref meeple)|meeple.player_id) {
+            *counts.entry(player_id).or_insert(0) += 1;
+        }
+
+
+        let max = counts.into_iter().max_by_key(|&(_, count)| count);
+
+        max.map(|(player_id, _)| player_id)
     }
 }
 
