@@ -3,11 +3,12 @@ use crate::deck::Deck;
 use crate::player::Player;
 use crate::tile::{PlacedTile, RenderStyle};
 use rand::prelude::StdRng;
-use rand::SeedableRng;
+use rand::{Rng, RngCore, SeedableRng};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::{Arc, RwLock};
+use rand::rngs::OsRng;
 use crate::score::Score;
 
 mod board;
@@ -20,7 +21,13 @@ mod tile_definitions;
 mod score;
 
 fn main() {
-    let rng = Rc::new(RefCell::new(StdRng::from_entropy()));
+
+    let seed: [u8; 32] = OsRng.gen();
+    // let seed = [210, 233, 120, 7, 69, 3, 119, 55, 175, 78, 62, 244, 9, 228, 209, 19, 30, 87, 10, 94, 40, 240, 237, 33, 213, 63, 135, 34, 17, 176, 193, 162];
+
+    println!("{:?}", &seed);
+
+    let rng = Rc::new(RefCell::new(StdRng::from_seed(seed)));
 
     let mut alice = Player::blue();
     alice.name = Some("Alice".to_string());

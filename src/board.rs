@@ -4,7 +4,7 @@ use crate::connected_regions::{
 use crate::player::{Meeple, Player, PlayerId, RegionIndex};
 use crate::tile::{BoardCoordinate, CardinalDirection, PlacedTile, Region, RegionType, RenderStyle, TileDefinition, TilePlacement, TILE_WIDTH};
 use crate::tile_definitions::RIVER_TERMINATOR;
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 use std::collections::{HashMap, HashSet};
 use crate::score::Score;
 
@@ -247,14 +247,14 @@ impl Board {
 
     }
 
-    fn possible_next_tile_coordinates(&self) -> HashSet<BoardCoordinate> {
+    fn possible_next_tile_coordinates(&self) -> IndexSet<BoardCoordinate> {
         if self.placed_tiles.is_empty() {
-            return HashSet::from([BoardCoordinate::new(0, 0)]);
+            return IndexSet::from([BoardCoordinate::new(0, 0)]);
         }
 
         let mut visited: HashSet<BoardCoordinate> = self.placed_tiles.keys().cloned().collect();
 
-        let mut possible_placements: HashSet<BoardCoordinate> = HashSet::new();
+        let mut possible_placements: IndexSet<BoardCoordinate> = IndexSet::new();
 
         for coordinate in self.placed_tiles.keys() {
             for adjacent_coordinate in coordinate.adjacent_coordinates().values() {
