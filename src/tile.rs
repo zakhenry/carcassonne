@@ -396,14 +396,14 @@ impl RenderCell {
                     b: 45,
                 },
                 Color::TrueColor {
-                    r: 165,
-                    g: 184,
-                    b: 90,
+                    r: 153,
+                    g: 195,
+                    b: 55,
                 },
                 Color::TrueColor {
-                    r: 85,
-                    g: 122,
-                    b: 30,
+                    r: 135,
+                    g: 175,
+                    b: 35,
                 },
             ),
             Self::Road => (
@@ -413,14 +413,14 @@ impl RenderCell {
                     b: 190,
                 },
                 Color::TrueColor {
-                    r: 220,
-                    g: 220,
-                    b: 220,
+                    r: 200,
+                    g: 200,
+                    b: 200,
                 },
                 Color::TrueColor {
-                    r: 150,
-                    g: 150,
-                    b: 150,
+                    r: 180,
+                    g: 180,
+                    b: 180,
                 },
             ),
             Self::City => (
@@ -430,14 +430,14 @@ impl RenderCell {
                     b: 88,
                 },
                 Color::TrueColor {
-                    r: 208,
-                    g: 169,
-                    b: 116,
+                    r: 209,
+                    g: 157,
+                    b: 98,
                 },
                 Color::TrueColor {
-                    r: 154,
-                    g: 94,
-                    b: 56,
+                    r: 189,
+                    g: 137,
+                    b: 78,
                 },
             ),
             Self::Cloister => (
@@ -453,14 +453,14 @@ impl RenderCell {
                     b: 215,
                 },
                 Color::TrueColor {
-                    r: 173,
-                    g: 186,
-                    b: 221,
+                    r: 153,
+                    g: 173,
+                    b: 225,
                 },
                 Color::TrueColor {
-                    r: 123,
-                    g: 142,
-                    b: 177,
+                    r: 133,
+                    g: 153,
+                    b: 205,
                 },
             ),
             Self::Corner => (Color::Red, Color::Red, Color::Red),
@@ -490,7 +490,7 @@ impl RenderCell {
                 _ => {
 
                     if let Some(meeple) = meeple {
-                        " ꆜ".bold().color(meeple.color.render_color(&RenderStyle::TrueColor)).on_color(primary).to_string()
+                        "ꆜ".bold().color(meeple.color.render_color(&RenderStyle::TrueColor)).on_color(primary).to_string()
                     } else {
                         "  ".on_color(primary).to_string()
                     }
