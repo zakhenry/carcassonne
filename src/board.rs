@@ -232,20 +232,6 @@ impl Board {
         })
     }
 
-    /// Note this finds the score of the current board state; it ignores any previous score delta
-    /// caused by meeple being liberated
-    pub fn calculate_board_score(&self) -> Score {
-        let mut score_delta = Score::new();
-
-        for (_, connected_region) in &self.connected_regions {
-            if let Some(winning_player) = connected_region.majority_meeple_player_id(self) {
-                score_delta.add_score(winning_player, connected_region.score(self));
-            }
-        }
-
-        score_delta
-
-    }
 
     fn possible_next_tile_coordinates(&self) -> IndexSet<BoardCoordinate> {
         if self.placed_tiles.is_empty() {
@@ -760,11 +746,11 @@ mod tests {
             PlacedTile::new_with_meeple(&CLOISTER_IN_FIELD, 0, 0, 0, (RegionIndex::new(1) /* the cloister */, Meeple::dummy())),
         ]).unwrap();
 
-        println!("{}", board.render(RenderStyle::Ascii));
+        println!("{}", board.render(&RenderStyle::Ascii));
 
         let result = board.place_tile(PlacedTile::new(&STRAIGHT_ROAD, 0, 1, 1)).expect("should succeed");
 
-        println!("{}", board.render(RenderStyle::Ascii));
+        println!("{}", board.render(&RenderStyle::Ascii));
 
         assert_eq!(result.liberated_meeple.len(), 3);
     }
