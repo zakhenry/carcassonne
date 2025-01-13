@@ -94,16 +94,20 @@ impl ConnectedRegion {
     pub(crate) fn residents<'a>(&self, board: &'a Board) -> Vec<(&'a PlacedTile, &'a RegionIndex, &'a Meeple)> {
         self.tile_regions
             .iter()
-            .filter_map(|r| {
-                board
+            .map(|r| {
+                let tile = board
                     .get_tile_at_coordinate(&r.tile_position)
-                    .map(|tile| (tile, r.region_index))
+                    .expect("should exist");
+
+                (tile, r.region_index)
             })
-            .filter_map(|(tile, region_index)| match &tile.meeple {
-                Some((meeple_region_index, meeple)) if &region_index == meeple_region_index => {
-                    Some((tile, meeple_region_index, meeple))
+            .filter_map(|(tile, region_index)| {
+                match &tile.meeple {
+                    Some((meeple_region_index, meeple)) if &region_index == meeple_region_index => {
+                        Some((tile, meeple_region_index, meeple))
+                    }
+                    _ => None,
                 }
-                _ => None,
             })
             .collect()
     }

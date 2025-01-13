@@ -178,6 +178,12 @@ impl Board {
             if connected_region.is_closed() {
                 let resident_tile_coordinates: Vec<_> = connected_region.residents(self).iter().map(|(tile, _, _)| tile.placement.coordinate).collect();
 
+                // score the region before liberating the meeple
+                // (otherwise they won't be considered resident and will score zero!)
+                if let Some(winning_player) = connected_region.majority_meeple_player_id(self) {
+                    score_delta.add_score(winning_player, connected_region.score(self))
+                }
+
                 let mut liberated_meeple_for_region = Vec::new();
 
                 for coordinate in resident_tile_coordinates {
@@ -193,10 +199,6 @@ impl Board {
                         }
                     }
 
-                }
-
-                if let Some(winning_player) = connected_region.majority_meeple_player_id(self) {
-                    score_delta.add_score(winning_player, connected_region.score(self))
                 }
 
                 liberated_meeple.extend(liberated_meeple_for_region);

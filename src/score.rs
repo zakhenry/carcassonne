@@ -99,7 +99,6 @@ impl ConnectedRegion {
             *counts.entry(player_id).or_insert(0) += 1;
         }
 
-
         let max = counts.into_iter().max_by_key(|&(_, count)| count);
 
         max.map(|(player_id, _)| player_id)
@@ -232,6 +231,27 @@ mod tests {
             (&alice, 2),
             (&bob, 3),
         ]))
+    }
+
+
+    #[test]
+    fn should_score_cities_with_double_points_when_they_are_closed() {
+
+        let mut alice = Player::red();
+        let mut bob = Player::green();
+
+        [
+            alice.move_with_meeple(&SIDE_CITY, 0, 0, 0, 1),
+            bob.move_with_meeple(&CORNER_CITY_WITH_PENNANT, 1, 0, 2, 1),
+            alice.move_no_meeple(&THREE_SIDED_CITY, 0, 1, 3),
+            bob.move_no_meeple(&CORNER_ROAD_WITH_CORNER_CITY, 2, 0, 1),
+            alice.move_no_meeple(&SIDE_CITY, 0, 2, 2),
+            bob.move_no_meeple(&SIDE_CITY, 1, 1, 1),
+        ].should_have_score(Score::from_iter([
+            (&alice, 8),
+            (&bob, 3),
+        ]))
+
     }
 
 }
