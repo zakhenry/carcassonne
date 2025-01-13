@@ -158,6 +158,10 @@ impl Board {
         let mut liberated_meeple: Vec<Meeple> = Vec::new();
         let mut score_delta = Score::new();
 
+        let coordinate = tile.placement.coordinate;
+
+        self.placed_tiles.insert(coordinate.clone(), tile);
+
         for mut connected_region in tile_connected_regions {
             let regions_to_merge = self.get_candidate_regions_to_merge(&connected_region);
 
@@ -201,29 +205,22 @@ impl Board {
             self.connected_regions.insert(connected_region.id, connected_region);
         }
 
-        let adjacent_closed_priest_tile_coordinates: Vec<_> = self.list_surrounding_tiles(&tile.placement.coordinate).into_iter()
-            .filter(|tile|tile.has_occupied_cloister())
-            .filter_map(|tile| {
-                let adjacent_count = self.list_surrounding_tiles(&tile.placement.coordinate).len();
+        let adjacent_cloister_tiles: Vec<_> = self.list_surrounding_tiles(&coordinate).into_iter()
+            .filter_map(|tile|if tile.has_occupied_cloister() { Some(tile.placement.coordinate)} else { None })
+            .collect();
 
-                // note we consider closed because we haven't yet placed the tile adjacent to this.
-                if adjacent_count == 7 {
-                    Some(tile.placement.coordinate.clone())
-                } else {
-                    None
+
+        for adjacent_coordinate in adjacent_cloister_tiles {
+            let adjacent_count = self.list_surrounding_tiles(&adjacent_coordinate).len();
+
+            if adjacent_count == 8 {
+                let tile = self.placed_tiles.get_mut(&adjacent_coordinate).expect("should exist");
+                if let Some((_, meeple)) = tile.meeple.take() {
+                    score_delta.add_score(meeple.player_id, 9);
+                    liberated_meeple.push(meeple);
                 }
-            }).collect();
-
-        self.placed_tiles.insert(tile.placement.coordinate, tile);
-
-        for coordinate in adjacent_closed_priest_tile_coordinates {
-            let tile = self.placed_tiles.get_mut(&coordinate).expect("should exist");
-            if let Some((_, meeple)) = tile.meeple.take() {
-                score_delta.add_score(meeple.player_id, 8);
-                liberated_meeple.push(meeple);
             }
         }
-
 
         // @todo implement scoring and meeple tracking in success result
         Ok(TilePlacementSuccess {

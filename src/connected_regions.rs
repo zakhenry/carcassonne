@@ -109,7 +109,7 @@ impl ConnectedRegion {
     }
 
     pub(crate) fn is_closed(&self) -> bool {
-        self.connected_edges.values().all(|e| e.is_some())
+        !self.connected_edges.is_empty() && self.connected_edges.values().all(|e| e.is_some())
     }
 
 }

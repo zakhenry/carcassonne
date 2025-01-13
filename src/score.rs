@@ -84,7 +84,7 @@ impl ConnectedRegion {
 
                 let adjacent_count = board.list_surrounding_tiles(&cloister_coordinate).len();
 
-                adjacent_count as u32
+                adjacent_count as u32 + 1
             },
             RegionType::Road => self.tile_regions.len() as u32,
             RegionType::Water => 0
@@ -129,7 +129,7 @@ mod tests {
     use crate::board::TilePlacementSuccess;
     use crate::player::{Meeple, RegionIndex};
     use crate::tile::{PlacedTile, TileDefinition};
-    use crate::tile_definitions::{CLOISTER_IN_FIELD, CORNER_ROAD, STRAIGHT_ROAD};
+    use crate::tile_definitions::{CLOISTER_IN_FIELD, CLOISTER_WITH_ROAD, CORNER_CITY_WITH_PENNANT, CORNER_ROAD, CORNER_ROAD_WITH_CORNER_CITY, SIDE_CITY, STRAIGHT_ROAD, THREE_SIDED_CITY};
     use super::*;
 
     trait TestUtil {
@@ -148,6 +148,8 @@ mod tests {
             }
 
             score.add_delta(&board.calculate_board_score());
+
+            println!("{}", board.render(&RenderStyle::Ascii));
 
             assert_eq!(score, expectation)
         }
@@ -192,6 +194,44 @@ mod tests {
             (&bob, 1),
         ]))
 
+    }
+
+
+    #[test]
+    fn should_score_cloisters_based_on_number_of_surrounding_tiles() {
+
+
+        let mut alice = Player::red();
+        let mut bob = Player::green();
+        let mut carol = Player::blue();
+
+        [
+            alice.move_with_meeple(&CLOISTER_IN_FIELD, -1, -1, 0, 1),
+            bob.move_with_meeple(&CLOISTER_WITH_ROAD, -1, 0, 2, 2),
+            carol.move_no_meeple(&CORNER_ROAD, -1, 1, 3),
+            alice.move_no_meeple(&STRAIGHT_ROAD, 0, 1, 3),
+        ].should_have_score(Score::from_iter([
+            (&alice, 2),
+            (&bob, 4),
+            // (&carol, 0),
+        ]))
+
+    }
+
+    #[test]
+    fn should_score_cities_based_on_number_of_connected_cities_with_pennants_scoring_and_additional_point() {
+        let mut alice = Player::red();
+        let mut bob = Player::green();
+
+        [
+            alice.move_with_meeple(&SIDE_CITY, 0, 0, 0, 1),
+            bob.move_with_meeple(&CORNER_CITY_WITH_PENNANT, 1, 0, 2, 1),
+            alice.move_no_meeple(&THREE_SIDED_CITY, 0, 1, 3),
+            bob.move_no_meeple(&CORNER_ROAD_WITH_CORNER_CITY, 2, 0, 1),
+        ].should_have_score(Score::from_iter([
+            (&alice, 2),
+            (&bob, 3),
+        ]))
     }
 
 }
