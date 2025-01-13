@@ -91,17 +91,22 @@ impl ConnectedRegion {
         }
     }
 
-    pub(crate) fn majority_meeple_player_id(&self, board: &Board) -> Option<PlayerId> {
-
+    pub(crate) fn majority_meeple_player_ids(&self, board: &Board) -> Vec<PlayerId> {
         let mut counts = HashMap::new();
 
-        for player_id in self.residents(board).iter().map(|(_, _, &ref meeple)|meeple.player_id) {
+        for player_id in self.residents(board).iter().map(|(_, _, &ref meeple)| meeple.player_id) {
             *counts.entry(player_id).or_insert(0) += 1;
         }
 
-        let max = counts.into_iter().max_by_key(|&(_, count)| count);
-
-        max.map(|(player_id, _)| player_id)
+        if let Some(&max_count) = counts.values().max() {
+            // Collect all PlayerIds with the maximum count
+            counts
+                .into_iter()
+                .filter_map(|(player_id, count)| if count == max_count { Some(player_id) } else { None })
+                .collect()
+        } else {
+            Vec::new()
+        }
     }
 }
 
@@ -113,8 +118,9 @@ impl Board {
         let mut score_delta = Score::new();
 
         for connected_region in self.get_connected_regions() {
-            if let Some(winning_player) = connected_region.majority_meeple_player_id(self) {
-                score_delta.add_score(winning_player, connected_region.score(self));
+            let region_score = connected_region.score(self);
+            for winning_player in connected_region.majority_meeple_player_ids(self) {
+                score_delta.add_score(winning_player, region_score);
             }
         }
 
@@ -128,7 +134,7 @@ mod tests {
     use crate::board::TilePlacementSuccess;
     use crate::player::{Meeple, RegionIndex};
     use crate::tile::{PlacedTile, TileDefinition};
-    use crate::tile_definitions::{CLOISTER_IN_FIELD, CLOISTER_WITH_ROAD, CORNER_CITY_WITH_PENNANT, CORNER_ROAD, CORNER_ROAD_WITH_CORNER_CITY, SIDE_CITY, STRAIGHT_ROAD, THREE_SIDED_CITY};
+    use crate::tile_definitions::{CLOISTER_IN_FIELD, CLOISTER_WITH_ROAD, CORNER_CITY_WITH_PENNANT, CORNER_ROAD, CORNER_ROAD_WITH_CORNER_CITY, OPPOSING_SIDE_CITIES, SIDE_CITY, STRAIGHT_ROAD, THREE_SIDED_CITY};
     use super::*;
 
     trait TestUtil {
@@ -253,5 +259,76 @@ mod tests {
         ]))
 
     }
+
+
+    #[test]
+    fn should_score_fields_based_on_number_of_completed_adjacent_cities() {
+
+        let mut alice = Player::red();
+        let mut bob = Player::green();
+
+        [
+            alice.move_with_meeple(&SIDE_CITY, 0, 0, 0, 0),
+            bob.move_no_meeple(&CORNER_CITY_WITH_PENNANT, 1, 0, 2),
+            alice.move_no_meeple(&THREE_SIDED_CITY, 0, 1, 3),
+            bob.move_with_meeple(&CORNER_ROAD_WITH_CORNER_CITY, 2, 0, 1, 1),
+            alice.move_no_meeple(&SIDE_CITY, 0, 2, 2),
+            bob.move_no_meeple(&SIDE_CITY, 1, 1, 1),
+        ].should_have_score(Score::from_iter([
+            (&alice, 3),
+            (&bob, 0),
+        ]))
+
+    }
+
+    #[test]
+    fn should_allocate_equal_points_between_players_meeple_equally_sharing_a_region() {
+
+        let mut alice = Player::red();
+        let mut bob = Player::green();
+
+        [
+            alice.move_with_meeple(&SIDE_CITY, 0, 0, 0, 0),
+            bob.move_no_meeple(&CORNER_CITY_WITH_PENNANT, 1, 0, 2),
+            alice.move_no_meeple(&THREE_SIDED_CITY, 0, 1, 3),
+            bob.move_with_meeple(&CORNER_ROAD_WITH_CORNER_CITY, 2, 0, 1, 1),
+            alice.move_no_meeple(&SIDE_CITY, 0, 2, 2),
+            bob.move_no_meeple(&SIDE_CITY, 1, 1, 1),
+            alice.move_no_meeple(&OPPOSING_SIDE_CITIES, 2, 1, 0),
+            bob.move_no_meeple(&STRAIGHT_ROAD, 3, 1, 0),
+            bob.move_no_meeple(&CORNER_ROAD, 3, 0, 1),
+        ].should_have_score(Score::from_iter([
+            (&alice, 3),
+            (&bob, 3),
+        ]))
+
+    }
+
+//     it("should allocate equal points between player's meeple equally sharing a region") {
+//
+// listOf(
+// playerMove(Tile.SideCity(), 0 to 0, player = ALICE, regionIndex = 0),
+// playerMove(Tile.CornerCityWithPennant(), 1 to 0, rotation = SOUTH),
+// playerMove(Tile.ThreeSidedCity(), 0 to 1, rotation = WEST),
+// playerMove(
+// Tile.CornerRoadWithCornerCity(),
+// 2 to 0,
+// rotation = EAST,
+// BOB, 1
+// ),
+// playerMove(Tile.SideCity(), 0 to 2, rotation = SOUTH),
+// playerMove(Tile.SideCity(), 1 to 1, rotation = EAST),
+// playerMove(Tile.OpposingSideCities(), 2 to 1),
+// playerMove(Tile.StraightRoad(), 3 to 1, rotation = SOUTH),
+// playerMove(Tile.CornerRoad(), 3 to 0, rotation = EAST),
+// ).shouldHaveScore(
+// mapOf(
+// ALICE to 3,
+// BOB to 3,
+// CAROL to 0
+// )
+// )
+//
+// }
 
 }

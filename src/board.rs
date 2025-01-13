@@ -180,7 +180,7 @@ impl Board {
 
                 // score the region before liberating the meeple
                 // (otherwise they won't be considered resident and will score zero!)
-                if let Some(winning_player) = connected_region.majority_meeple_player_id(self) {
+                for winning_player in connected_region.majority_meeple_player_ids(self) {
                     score_delta.add_score(winning_player, connected_region.score(self))
                 }
 
