@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use colored::Colorize;
 use crate::board::Board;
 use crate::connected_regions::ConnectedRegion;
@@ -304,31 +304,50 @@ mod tests {
 
     }
 
-//     it("should allocate equal points between player's meeple equally sharing a region") {
-//
-// listOf(
-// playerMove(Tile.SideCity(), 0 to 0, player = ALICE, regionIndex = 0),
-// playerMove(Tile.CornerCityWithPennant(), 1 to 0, rotation = SOUTH),
-// playerMove(Tile.ThreeSidedCity(), 0 to 1, rotation = WEST),
-// playerMove(
-// Tile.CornerRoadWithCornerCity(),
-// 2 to 0,
-// rotation = EAST,
-// BOB, 1
-// ),
-// playerMove(Tile.SideCity(), 0 to 2, rotation = SOUTH),
-// playerMove(Tile.SideCity(), 1 to 1, rotation = EAST),
-// playerMove(Tile.OpposingSideCities(), 2 to 1),
-// playerMove(Tile.StraightRoad(), 3 to 1, rotation = SOUTH),
-// playerMove(Tile.CornerRoad(), 3 to 0, rotation = EAST),
-// ).shouldHaveScore(
-// mapOf(
-// ALICE to 3,
-// BOB to 3,
-// CAROL to 0
-// )
-// )
-//
-// }
+    #[test]
+    fn should_only_give_the_score_for_one_meeple_when_a_player_has_more_than_one_meeple_in_a_region() {
+
+        let mut alice = Player::red();
+        let mut bob = Player::green();
+
+        [
+            alice.move_with_meeple(&SIDE_CITY, 0, 0, 0, 0),
+            bob.move_no_meeple(&CORNER_CITY_WITH_PENNANT, 1, 0, 2),
+            alice.move_with_meeple(&CORNER_ROAD_WITH_CORNER_CITY, 2, 0, 1, 1),
+            bob.move_no_meeple(&THREE_SIDED_CITY, 0, 1, 3),
+            alice.move_no_meeple(&SIDE_CITY, 0, 2, 2),
+            bob.move_no_meeple(&SIDE_CITY, 1, 1, 1),
+            alice.move_no_meeple(&OPPOSING_SIDE_CITIES, 2, 1, 0),
+            bob.move_no_meeple(&STRAIGHT_ROAD, 3, 1, 0),
+            bob.move_no_meeple(&CORNER_ROAD, 3, 0, 1),
+        ].should_have_score(Score::from_iter([
+            (&alice, 3),
+        ]))
+
+    }
+
+
+    #[test]
+    fn should_give_all_points_to_the_player_with_a_region_dominated_by_their_meeple() {
+
+        let mut alice = Player::red();
+        let mut bob = Player::green();
+
+        [
+            alice.move_with_meeple(&SIDE_CITY, 0, 0, 0, 0),
+            bob.move_no_meeple(&CORNER_CITY_WITH_PENNANT, 1, 0, 2),
+            alice.move_with_meeple(&THREE_SIDED_CITY, 0, 1, 3, 0),
+            bob.move_with_meeple(&CORNER_ROAD_WITH_CORNER_CITY, 2, 0, 2, 1),
+            alice.move_no_meeple(&SIDE_CITY, 0, 2, 2),
+            bob.move_no_meeple(&CORNER_ROAD, 2, 1, 3),
+            alice.move_no_meeple(&STRAIGHT_ROAD, -1, 1, 0),
+            bob.move_no_meeple(&SIDE_CITY, 1, 1, 1),
+            alice.move_no_meeple(&CORNER_ROAD, -1, 0, 1),
+        ].should_have_score(Score::from_iter([
+            (&alice, 3),
+        ]))
+
+    }
+
 
 }

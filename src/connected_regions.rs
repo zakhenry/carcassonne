@@ -292,9 +292,9 @@ mod tests {
                 PlacedTile::new(&CLOISTER_IN_FIELD, 1, 1, 0),
             ],
             &[
-                (Cloister, true),
-                (Cloister, true),
-                (Cloister, true),
+                (Cloister, false),
+                (Cloister, false),
+                (Cloister, false),
                 (Field, false),
             ],
         )
@@ -326,7 +326,7 @@ mod tests {
                 PlacedTile::new(&CLOISTER_IN_FIELD, 0, 0, 0),
             ],
             &[
-                (Cloister, true),
+                (Cloister, false),
                 (Field, true),
                 (Field, false),
                 (Road, true),
