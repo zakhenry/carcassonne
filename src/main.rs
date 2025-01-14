@@ -19,6 +19,7 @@ mod player;
 mod tile;
 mod tile_definitions;
 mod score;
+mod move_hints;
 
 fn main() {
 
@@ -67,6 +68,9 @@ fn main() {
 
         // create dense board by selecting hints that maximize adjacent placement of tiles
         let selected_move_hint = move_hints.iter().max_by_key(|&hint| {
+
+            let score_delta = hint.score_delta(&board.read().unwrap(), &player);
+
             let adjacent_region_count = board
                 .read()
                 .unwrap()

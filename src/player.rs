@@ -54,7 +54,7 @@ pub type PlayerId = Uuid;
 
 const MEEPLE_COUNT: usize = 7;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Player {
     pub(crate) id: PlayerId,
     pub(crate) name: Option<String>,

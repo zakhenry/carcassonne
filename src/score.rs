@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::ops::Sub;
 use colored::Colorize;
 use crate::board::Board;
 use crate::connected_regions::ConnectedRegion;
@@ -42,6 +43,15 @@ impl Score {
 
     pub(crate) fn add_score(&mut self, player_id: PlayerId, score: u32) {
         *self.0.entry(player_id).or_insert(0) += score;
+    }
+}
+
+
+impl Sub for Score {
+    type Output = Score;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        todo!()
     }
 }
 
