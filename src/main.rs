@@ -20,6 +20,7 @@ mod tile;
 mod tile_definitions;
 mod score;
 mod move_hints;
+mod test_util;
 
 fn main() {
 

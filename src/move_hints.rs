@@ -1,10 +1,10 @@
-use std::collections::HashSet;
-use std::ops::Sub;
-use indexmap::IndexSet;
-use crate::board::{Board};
+use crate::board::Board;
 use crate::player::{Meeple, MeepleColor, Player, RegionIndex};
 use crate::score::Score;
 use crate::tile::{BoardCoordinate, PlacedTile, RegionType, TileDefinition, TilePlacement};
+use indexmap::IndexSet;
+use std::collections::HashSet;
+use std::ops::Sub;
 
 pub(crate) struct MoveHint {
     pub(crate) tile: &'static TileDefinition,
@@ -113,26 +113,10 @@ impl MoveHint {
 
 #[cfg(test)]
 mod tests {
+    use crate::test_util::tests::{TestMoveHint, TestPlayer};
     use super::*;
-    use crate::tile_definitions::{CENTRE_CITY_WITH_PENNANT, CLOISTER_WITH_ROAD, CORNER_ROAD, CORNER_ROAD_WITH_SIDE_CITY, SIDE_CITY, STRAIGHT_RIVER, STRAIGHT_ROAD, THREE_SIDED_CITY_WITH_ROAD};
+    use crate::tile_definitions::{CENTRE_CITY_WITH_PENNANT, CLOISTER_WITH_ROAD, CORNER_ROAD, CORNER_ROAD_WITH_SIDE_CITY, SIDE_CITY, STRAIGHT_CITY_WITH_SIDE_FIELDS, STRAIGHT_ROAD};
 
-    trait MoveHintTestUtil {
-        fn should_have_hint_placements<T : IntoIterator<Item = &'static str>>(&self, placements: T);
-    }
-
-    impl MoveHintTestUtil for Vec<MoveHint> {
-        fn should_have_hint_placements<T : IntoIterator<Item = &'static str>>(&self, placements: T) {
-            let mut expectation: Vec<_> = placements.into_iter().collect();
-            expectation.sort();
-
-            let mut test: Vec<_> = self.iter().map(|hint|
-                format!("{},{} @{}", hint.tile_placement.coordinate.x, hint.tile_placement.coordinate.y, hint.tile_placement.rotations)
-            ).collect();
-            test.sort();
-
-            assert_eq!(test, expectation)
-        }
-    }
 
     #[test]
     fn should_return_the_board_origin_when_the_board_is_empty() {
@@ -189,5 +173,26 @@ mod tests {
             ]);
 
     }
+
+    #[test]
+    fn should_return_no_valid_meeple_placement_when_all_possible_places_are_taken() {
+
+        let mut alice = Player::blue();
+
+        Board::new_with_tiles([
+            alice.move_with_meeple(&SIDE_CITY, 0, 0, 3, 1),
+        ])
+            .expect("should be valid")
+            .get_move_hints(&CENTRE_CITY_WITH_PENNANT, true)
+            .should_have_hint_placements([
+                "1,0 @0"
+            ]);
+
+    }
+
+    // #[test]
+    // fn should_return_the_relative_score_change_for_each_possible_move() {
+    //     todo!()
+    // }
 
 }

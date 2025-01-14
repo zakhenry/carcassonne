@@ -1,10 +1,10 @@
-use std::collections::{HashMap, HashSet};
-use std::ops::{AddAssign, Sub};
-use colored::Colorize;
 use crate::board::Board;
 use crate::connected_regions::ConnectedRegion;
-use crate::player::{MeepleColor, Player, PlayerId};
+use crate::player::{Player, PlayerId};
 use crate::tile::{Region, RegionType, RenderStyle};
+use colored::Colorize;
+use std::collections::HashMap;
+use std::ops::{AddAssign, Sub};
 
 #[derive(Debug, Default, PartialEq)]
 pub struct Score(HashMap<PlayerId, i32>);
@@ -148,56 +148,9 @@ impl Board {
 
 #[cfg(test)]
 mod tests {
-    use crate::board::TilePlacementSuccess;
-    use crate::player::{Meeple, RegionIndex};
-    use crate::tile::{PlacedTile, TileDefinition};
-    use crate::tile_definitions::{CLOISTER_IN_FIELD, CLOISTER_WITH_ROAD, CORNER_CITY_WITH_PENNANT, CORNER_ROAD, CORNER_ROAD_WITH_CORNER_CITY, OPPOSING_SIDE_CITIES, SIDE_CITY, STRAIGHT_ROAD, THREE_SIDED_CITY};
     use super::*;
-
-    trait TestUtil {
-        fn should_have_score(&self, expectation: Score);
-    }
-
-    impl TestUtil for [PlacedTile] {
-        fn should_have_score(&self, expectation: Score) {
-            let mut board = Board::default();
-
-            let mut score = Score::new();
-
-            for tile in self.iter().cloned() {
-                let TilePlacementSuccess { score_delta, .. } = board.place_tile(tile).expect("tile placement should be valid");
-                score += score_delta
-            }
-
-            score += board.calculate_board_score();
-
-            println!("{}", board.render(&RenderStyle::Ascii));
-
-            assert_eq!(score, expectation)
-        }
-    }
-
-    trait TestPlayer {
-
-        fn move_with_meeple(&mut self, tile: &'static TileDefinition, x: i8, y: i8, rotations: u8, meeple_region_index: usize) -> PlacedTile;
-
-        fn move_no_meeple(&self, tile: &'static TileDefinition, x: i8, y: i8, rotations: u8) -> PlacedTile;
-    }
-
-    impl TestPlayer for Player {
-        fn move_with_meeple(&mut self, tile: &'static TileDefinition, x: i8, y: i8, rotations: u8, meeple_region_index: usize) -> PlacedTile {
-            let mut tile = PlacedTile::new(tile, x, y, rotations);
-
-            tile.meeple = Some((RegionIndex::new(meeple_region_index), self.meeple.pop().expect("player should have enough meeple")));
-
-            tile
-        }
-
-        fn move_no_meeple(&self, tile: &'static TileDefinition, x: i8, y: i8, rotations: u8) -> PlacedTile {
-            PlacedTile::new(tile, x, y, rotations)
-        }
-    }
-
+    use crate::tile_definitions::{CLOISTER_IN_FIELD, CLOISTER_WITH_ROAD, CORNER_CITY_WITH_PENNANT, CORNER_ROAD, CORNER_ROAD_WITH_CORNER_CITY, OPPOSING_SIDE_CITIES, SIDE_CITY, STRAIGHT_ROAD, THREE_SIDED_CITY};
+    use crate::test_util::tests::{TestConnectedRegion, TestPlayer};
 
     #[test]
     fn should_add_score() {
