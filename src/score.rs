@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use std::ops::Sub;
+use std::ops::{AddAssign, Sub};
 use colored::Colorize;
 use crate::board::Board;
 use crate::connected_regions::ConnectedRegion;
@@ -7,7 +7,7 @@ use crate::player::{MeepleColor, Player, PlayerId};
 use crate::tile::{Region, RegionType, RenderStyle};
 
 #[derive(Debug, Default, PartialEq)]
-pub struct Score(HashMap<PlayerId, u32>);
+pub struct Score(HashMap<PlayerId, i32>);
 
 impl Score {
     pub(crate) fn new() -> Self {
@@ -15,7 +15,7 @@ impl Score {
     }
 
 
-    pub(crate) fn from_iter<'a, I: IntoIterator<Item=(&'a Player, u32)>>(player_score: I) -> Self {
+    pub(crate) fn from_iter<'a, I: IntoIterator<Item=(&'a Player, i32)>>(player_score: I) -> Self {
         Self(HashMap::from_iter(player_score.into_iter().map(|(player, score)|(player.id, score))))
     }
 
@@ -35,14 +35,17 @@ impl Score {
 
     }
 
-    pub(crate) fn add_delta(&mut self, delta: &Self) {
-        for (player_id, score) in delta.0.iter() {
+    pub(crate) fn add_score(&mut self, player_id: PlayerId, score: i32) {
+        *self.0.entry(player_id).or_insert(0) += score;
+    }
+}
+
+
+impl AddAssign for Score {
+    fn add_assign(&mut self, rhs: Self) {
+        for (player_id, score) in rhs.0.iter() {
             self.add_score(*player_id, *score);
         }
-    }
-
-    pub(crate) fn add_score(&mut self, player_id: PlayerId, score: u32) {
-        *self.0.entry(player_id).or_insert(0) += score;
     }
 }
 
@@ -50,8 +53,12 @@ impl Score {
 impl Sub for Score {
     type Output = Score;
 
-    fn sub(self, rhs: Self) -> Self::Output {
-        todo!()
+    fn sub(mut self, rhs: Self) -> Self::Output {
+        for (player_id, score) in rhs.0.iter() {
+            *self.0.entry(*player_id).or_insert(0) -= score;
+        }
+
+        self
     }
 }
 
@@ -130,7 +137,7 @@ impl Board {
         for connected_region in self.get_connected_regions() {
             let region_score = connected_region.score(self);
             for winning_player in connected_region.majority_meeple_player_ids(self) {
-                score_delta.add_score(winning_player, region_score);
+                score_delta.add_score(winning_player, region_score as i32);
             }
         }
 
@@ -159,10 +166,10 @@ mod tests {
 
             for tile in self.iter().cloned() {
                 let TilePlacementSuccess { score_delta, .. } = board.place_tile(tile).expect("tile placement should be valid");
-                score.add_delta(&score_delta);
+                score += score_delta
             }
 
-            score.add_delta(&board.calculate_board_score());
+            score += board.calculate_board_score();
 
             println!("{}", board.render(&RenderStyle::Ascii));
 
@@ -191,6 +198,32 @@ mod tests {
         }
     }
 
+
+    #[test]
+    fn should_add_score() {
+
+        let alice = Player::green();
+        let bob = Player::blue();
+
+        let mut a = Score::from_iter([(&alice, 1)]);
+        let b = Score::from_iter([(&alice, 2), (&bob, 3)]);
+
+        a += b;
+
+        assert_eq!(a, Score::from_iter([(&alice, 3), (&bob, 3)]))
+    }
+
+    #[test]
+    fn should_subtract_scores() {
+        let alice = Player::green();
+        let bob = Player::blue();
+        let carol = Player::blue();
+
+        let a = Score::from_iter([(&alice, 3), (&carol, 4)]);
+        let b = Score::from_iter([(&alice, 2), (&bob, 3)]);
+
+        assert_eq!(a - b, Score::from_iter([(&alice, 1), (&bob, -3), (&carol, 4)]))
+    }
 
     #[test]
     fn should_score_roads_based_on_number_of_connected_roads() {

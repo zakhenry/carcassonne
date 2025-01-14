@@ -63,12 +63,12 @@ impl Board {
         }
     }
 
-    pub(crate) fn new_with_tiles(
-        tiles: Vec<PlacedTile>,
+    pub(crate) fn new_with_tiles<T: IntoIterator<Item=PlacedTile>>(
+        tiles: T,
     ) -> Result<Self, InvalidTilePlacement> {
         let mut board = Board::default();
 
-        for tile in tiles {
+        for tile in tiles.into_iter() {
             board.place_tile(tile)?;
         }
 
@@ -129,7 +129,7 @@ impl Board {
                 // score the region before liberating the meeple
                 // (otherwise they won't be considered resident and will score zero!)
                 for winning_player in connected_region.majority_meeple_player_ids(self) {
-                    score_delta.add_score(winning_player, connected_region.score(self))
+                    score_delta.add_score(winning_player, connected_region.score(self) as i32)
                 }
 
                 let mut liberated_meeple_for_region = Vec::new();

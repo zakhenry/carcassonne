@@ -104,7 +104,7 @@ fn main() {
 
             let TilePlacementSuccess { liberated_meeple, score_delta } = board.write().unwrap().place_tile(tile).unwrap();
 
-            score.add_delta(&score_delta);
+            score += score_delta;
 
             for meeple in liberated_meeple {
                 players.get_mut(&meeple.player_id).expect("should exist").meeple.push(meeple);
@@ -121,7 +121,7 @@ fn main() {
 
     let board_score = board.read().unwrap().calculate_board_score();
 
-    score.add_delta(&board_score);
+    score += board_score;
 
     println!("{}", board.read().unwrap().render(&render_style));
     println!("Final score is:\n{}", score.render(&players, &render_style));

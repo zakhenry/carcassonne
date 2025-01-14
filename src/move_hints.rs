@@ -114,10 +114,79 @@ impl MoveHint {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tile_definitions::{STRAIGHT_RIVER, THREE_SIDED_CITY_WITH_ROAD};
+    use crate::tile_definitions::{CENTRE_CITY_WITH_PENNANT, CLOISTER_WITH_ROAD, CORNER_ROAD, CORNER_ROAD_WITH_SIDE_CITY, SIDE_CITY, STRAIGHT_RIVER, STRAIGHT_ROAD, THREE_SIDED_CITY_WITH_ROAD};
+
+    trait MoveHintTestUtil {
+        fn should_have_hint_placements<T : IntoIterator<Item = &'static str>>(&self, placements: T);
+    }
+
+    impl MoveHintTestUtil for Vec<MoveHint> {
+        fn should_have_hint_placements<T : IntoIterator<Item = &'static str>>(&self, placements: T) {
+            let mut expectation: Vec<_> = placements.into_iter().collect();
+            expectation.sort();
+
+            let mut test: Vec<_> = self.iter().map(|hint|
+                format!("{},{} @{}", hint.tile_placement.coordinate.x, hint.tile_placement.coordinate.y, hint.tile_placement.rotations)
+            ).collect();
+            test.sort();
+
+            assert_eq!(test, expectation)
+        }
+    }
 
     #[test]
-    fn test_base_deck_yields_only_base_tiles() {
+    fn should_return_the_board_origin_when_the_board_is_empty() {
+
+        Board::new()
+            .get_move_hints(&CORNER_ROAD_WITH_SIDE_CITY, false)
+            .should_have_hint_placements([
+                "0,0 @0",
+                "0,0 @1",
+                "0,0 @2",
+                "0,0 @3"
+            ])
+
+    }
+
+    #[test]
+    fn should_return_no_rotationally_symmetric_move_hints() {
+
+        Board::new()
+            .get_move_hints(&CENTRE_CITY_WITH_PENNANT, false)
+            .should_have_hint_placements([
+                "0,0 @0",
+            ]);
+
+
+        Board::new()
+            .get_move_hints(&STRAIGHT_ROAD, false)
+            .should_have_hint_placements([
+                "0,0 @0",
+                "0,0 @1",
+            ]);
+
+    }
+
+    #[test]
+    fn should_return_a_list_of_valid_tile_placements_for_a_given_tile() {
+
+        Board::new_with_tiles([
+            PlacedTile::new(&CLOISTER_WITH_ROAD, 1, 0, 2),
+            PlacedTile::new(&CORNER_ROAD, 2, 0, 0),
+        ])
+            .expect("should be valid")
+            .get_move_hints(&CORNER_ROAD_WITH_SIDE_CITY, false)
+            .should_have_hint_placements([
+                "1,-1 @1",
+                "1,1 @1",
+                "1,1 @2",
+                "0,0 @0",
+                "2,-1 @1",
+                "3,0 @0",
+                "3,0 @1",
+                "2,1 @1",
+                "2,1 @2",
+            ]);
 
     }
 
