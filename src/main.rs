@@ -40,7 +40,7 @@ fn main() {
 
     let mut players: HashMap<_, _> = vec![alice, bob]
         .into_iter()
-        .map(|p| (p.id, p))
+        .map(|p| (p.meeple_color, p))
         .collect();
     let player_ids: Vec<_> = players.keys().copied().collect();
     let mut player_id_iter = player_ids.iter().cycle();
@@ -70,7 +70,7 @@ fn main() {
         // create dense board by selecting hints that maximize adjacent placement of tiles
         let selected_move_hint = move_hints.iter().max_by_key(|&hint| {
 
-            let score_delta = hint.score_delta(&board.read().unwrap(), &player);
+            let score_delta = hint.score_delta(&board.read().unwrap(), &player, true);
 
             let adjacent_region_count = board
                 .read()
@@ -108,7 +108,7 @@ fn main() {
             score += score_delta;
 
             for meeple in liberated_meeple {
-                players.get_mut(&meeple.player_id).expect("should exist").meeple.push(meeple);
+                players.get_mut(&meeple.color).expect("should exist").meeple.push(meeple);
             }
         } else {
             panic!("no move hints?")

@@ -1,10 +1,10 @@
-use crate::board::Board;
+use crate::board::{Board, TilePlacementSuccess};
 use crate::player::{Meeple, MeepleColor, Player, RegionIndex};
 use crate::score::Score;
 use crate::tile::{BoardCoordinate, PlacedTile, RegionType, TileDefinition, TilePlacement};
 use indexmap::IndexSet;
 use std::collections::HashSet;
-use std::ops::Sub;
+use std::ops::{Add, Sub};
 
 pub(crate) struct MoveHint {
     pub(crate) tile: &'static TileDefinition,
@@ -88,25 +88,29 @@ impl Board {
 
 }
 
-
 impl MoveHint {
 
-    pub(crate) fn score_delta(&self, board: &Board, player: &Player) -> Score {
-        let before = board.calculate_board_score();
-
+    pub(crate) fn score_delta(&self, board: &Board, player: &Player, calculate_as_if_last_tile: bool) -> Score {
         let mut test_board = board.clone();
 
         let dummy_tile = PlacedTile {
             tile: self.tile,
             placement: self.tile_placement.clone(),
-            meeple: self.meeple_placement.map(|region_index|(region_index, Meeple { color: MeepleColor::Black, player_id: player.id.clone() })),
+            meeple: self.meeple_placement.map(|region_index|(region_index, Meeple { color: player.meeple_color })),
         };
 
-        test_board.place_tile(dummy_tile).expect("should be a valid move");
+        let TilePlacementSuccess {score_delta, ..} = test_board.place_tile(dummy_tile).expect("should be a valid move");
 
-        let after = test_board.calculate_board_score();
+        if calculate_as_if_last_tile {
 
-        after - before
+            let before = board.calculate_board_score();
+            let after = test_board.calculate_board_score();
+
+            (after + score_delta) - before
+        } else {
+            score_delta
+        }
+
     }
 
 }
@@ -114,8 +118,9 @@ impl MoveHint {
 #[cfg(test)]
 mod tests {
     use crate::test_util::tests::{TestMoveHint, TestPlayer};
+    use crate::tile::RenderStyle;
     use super::*;
-    use crate::tile_definitions::{CENTRE_CITY_WITH_PENNANT, CLOISTER_WITH_ROAD, CORNER_ROAD, CORNER_ROAD_WITH_SIDE_CITY, SIDE_CITY, STRAIGHT_CITY_WITH_SIDE_FIELDS, STRAIGHT_ROAD};
+    use crate::tile_definitions::{CENTRE_CITY_WITH_PENNANT, CLOISTER_IN_FIELD, CLOISTER_WITH_ROAD, CORNER_ROAD, CORNER_ROAD_WITH_SIDE_CITY, SIDE_CITY, STRAIGHT_CITY_WITH_SIDE_FIELDS, STRAIGHT_ROAD};
 
 
     #[test]
@@ -190,9 +195,48 @@ mod tests {
 
     }
 
-    // #[test]
-    // fn should_return_the_relative_score_change_for_each_possible_move() {
-    //     todo!()
-    // }
+    #[test]
+    fn should_return_the_relative_score_change_for_each_possible_move() {
+
+        let mut alice = Player::red();
+        let mut bob = Player::blue();
+        let mut carol = Player::green();
+
+        let board = Board::new_with_tiles([
+            alice.move_with_meeple(&SIDE_CITY, 1, 0, 1, 1),
+            bob.move_no_meeple(&CORNER_ROAD, 1, -1, 3),
+            carol.move_no_meeple(&CORNER_ROAD, 1, 1, 0),
+            alice.move_with_meeple(&SIDE_CITY, 0, -1, 0, 1),
+            bob.move_no_meeple(&SIDE_CITY, 0, 1, 2),
+            carol.move_with_meeple(&CORNER_ROAD, -1, -1, 2, 1),
+            alice.move_with_meeple(&CLOISTER_IN_FIELD, -1, 1, 0, 1),
+            bob.move_with_meeple(&SIDE_CITY, -1, 0, 3, 1),
+        ])
+            .expect("should be valid");
+
+        println!("{}", board.render(&RenderStyle::Ascii));
+
+        let move_hints = board
+            .get_move_hints(&CENTRE_CITY_WITH_PENNANT, true);
+
+        move_hints.should_have_hint_placements([
+            "0,0 @0"
+        ]);
+
+        let hint = move_hints.first().expect("should be one");
+
+        assert!(hint.meeple_placement.is_none());
+
+        assert_eq!(hint.score_delta(&board, &carol, false), Score::from_iter([
+            (&alice, 12), // closed city (12)
+        ]));
+
+        assert_eq!(hint.score_delta(&board, &carol, true), Score::from_iter([
+            (&alice, 13), // closed city (12) + cloister addition (1)
+            (&bob, -1), // city shutout by alice
+            (&carol, 3), // farmer gained closed city
+        ]));
+
+    }
 
 }

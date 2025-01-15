@@ -3,7 +3,7 @@ use colored::Color;
 use uuid::Uuid;
 use crate::tile::RenderStyle;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]
 pub(crate) enum MeepleColor {
     Red,
     Green,
@@ -50,13 +50,12 @@ impl MeepleColor {
     }
 }
 
-pub type PlayerId = Uuid;
+pub type PlayerIdentifier = MeepleColor;
 
 const MEEPLE_COUNT: usize = 7;
 
 #[derive(Debug, Clone)]
 pub struct Player {
-    pub(crate) id: PlayerId,
     pub(crate) name: Option<String>,
     pub(crate) meeple: Vec<Meeple>,
     pub(crate) meeple_color: MeepleColor
@@ -67,14 +66,13 @@ impl Player {
         let meeple = Vec::with_capacity(MEEPLE_COUNT);
 
         let mut player = Self {
-            id: PlayerId::new_v4(),
             name: None,
             meeple,
             meeple_color: color.clone(),
         };
 
         for _ in 0..MEEPLE_COUNT {
-            player.meeple.push(Meeple::new(&player, color.clone()));
+            player.meeple.push(Meeple::new(color.clone()));
         }
 
         player
@@ -121,20 +119,17 @@ impl Deref for RegionIndex {
 #[derive(Debug, Clone)]
 pub struct Meeple {
     pub(crate) color: MeepleColor,
-    pub(crate) player_id: PlayerId,
 }
 
 impl Meeple {
-    fn new(player: &Player, color: MeepleColor) -> Self {
+    fn new(color: MeepleColor) -> Self {
         Self {
-            player_id: player.id,
             color,
         }
     }
 
     pub(crate) fn dummy() -> Self {
         Self {
-            player_id: Uuid::nil(),
             color: MeepleColor::Black,
         }
     }

@@ -1,13 +1,13 @@
 use crate::board::Board;
 use crate::connected_regions::ConnectedRegion;
-use crate::player::{Player, PlayerId};
+use crate::player::{Meeple, Player, PlayerIdentifier};
 use crate::tile::{Region, RegionType, RenderStyle};
 use colored::Colorize;
 use std::collections::HashMap;
-use std::ops::{AddAssign, Sub};
+use std::ops::{Add, AddAssign, Sub};
 
-#[derive(Debug, Default, PartialEq)]
-pub struct Score(HashMap<PlayerId, i32>);
+#[derive(Debug, Default, PartialEq, Clone)]
+pub struct Score(HashMap<PlayerIdentifier, i32>);
 
 impl Score {
     pub(crate) fn new() -> Self {
@@ -16,11 +16,11 @@ impl Score {
 
 
     pub(crate) fn from_iter<'a, I: IntoIterator<Item=(&'a Player, i32)>>(player_score: I) -> Self {
-        Self(HashMap::from_iter(player_score.into_iter().map(|(player, score)|(player.id, score))))
+        Self(HashMap::from_iter(player_score.into_iter().map(|(player, score)|(player.meeple_color, score))))
     }
 
     // @todo make a proper pretty table
-    pub(crate) fn render(&self, players: &HashMap<PlayerId, Player>, render_style: &RenderStyle) -> String {
+    pub(crate) fn render(&self, players: &HashMap<PlayerIdentifier, Player>, render_style: &RenderStyle) -> String {
 
         let mut out = String::new();
 
@@ -35,11 +35,24 @@ impl Score {
 
     }
 
-    pub(crate) fn add_score(&mut self, player_id: PlayerId, score: i32) {
+    pub(crate) fn add_score(&mut self, player_id: PlayerIdentifier, score: i32) {
         *self.0.entry(player_id).or_insert(0) += score;
     }
 }
 
+
+
+impl Add for Score {
+    type Output = Score;
+
+    fn add(mut self, rhs: Self) -> Self::Output {
+        for (player_id, score) in rhs.0.iter() {
+            *self.0.entry(*player_id).or_insert(0) += score;
+        }
+
+        self
+    }
+}
 
 impl AddAssign for Score {
     fn add_assign(&mut self, rhs: Self) {
@@ -108,10 +121,10 @@ impl ConnectedRegion {
         }
     }
 
-    pub(crate) fn majority_meeple_player_ids(&self, board: &Board) -> Vec<PlayerId> {
+    pub(crate) fn majority_meeple_player_ids(&self, board: &Board) -> Vec<PlayerIdentifier> {
         let mut counts = HashMap::new();
 
-        for player_id in self.residents(board).iter().map(|(_, _, &ref meeple)| meeple.player_id) {
+        for player_id in self.residents(board).iter().map(|(_, _, &ref meeple)| meeple.color) {
             *counts.entry(player_id).or_insert(0) += 1;
         }
 
@@ -175,7 +188,7 @@ mod tests {
         let a = Score::from_iter([(&alice, 3), (&carol, 4)]);
         let b = Score::from_iter([(&alice, 2), (&bob, 3)]);
 
-        assert_eq!(a - b, Score::from_iter([(&alice, 1), (&bob, -3), (&carol, 4)]))
+        assert_eq!(a - b, Score::from_iter([(&alice, 1), (&bob, -3), (&carol, 4)]));
     }
 
     #[test]

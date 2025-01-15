@@ -1,7 +1,7 @@
 use crate::connected_regions::{
     ConnectedRegion, ConnectedRegionId, PlacedTileEdge,
 };
-use crate::player::{Meeple, Player, PlayerId, RegionIndex};
+use crate::player::{Meeple, Player, PlayerIdentifier, RegionIndex};
 use crate::tile::{BoardCoordinate, CardinalDirection, PlacedTile, Region, RegionType, RenderStyle, TileDefinition, TilePlacement, TILE_WIDTH};
 use crate::tile_definitions::RIVER_TERMINATOR;
 use indexmap::{IndexMap, IndexSet};
@@ -166,7 +166,7 @@ impl Board {
             if adjacent_count == 8 {
                 let tile = self.placed_tiles.get_mut(&adjacent_coordinate).expect("should exist");
                 if let Some((_, meeple)) = tile.meeple.take() {
-                    score_delta.add_score(meeple.player_id, 9);
+                    score_delta.add_score(meeple.color.clone(), 9);
                     liberated_meeple.push(meeple);
                 }
             }

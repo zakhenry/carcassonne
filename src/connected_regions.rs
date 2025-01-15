@@ -1,7 +1,7 @@
 // data class UniqueTileRegion(val tileId: UUID, val regionIndex: Int, val region: Region, val edgeless: Boolean)
 
 use crate::board::Board;
-use crate::player::{Meeple, PlayerId, RegionIndex};
+use crate::player::{Meeple, PlayerIdentifier, RegionIndex};
 use crate::tile::{
     BoardCoordinate, CardinalDirection, PlacedTile, Region, RegionType,
 };
