@@ -119,8 +119,9 @@ impl Board {
                 let merge_region = self.connected_regions.remove(&region_id).expect("should exist");
 
                 for (_, mut region ) in &mut self.connected_regions {
-                    region.adjacent_regions.remove(&merge_region.id);
-                    region.adjacent_regions.insert(connected_region.id);
+                    if region.adjacent_regions.remove(&merge_region.id) {
+                        region.adjacent_regions.insert(connected_region.id);
+                    }
                 }
 
                 connected_region.merge_mut(merge_region).expect("should merge");
