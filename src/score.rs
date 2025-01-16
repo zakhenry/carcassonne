@@ -38,6 +38,10 @@ impl Score {
     pub(crate) fn add_score(&mut self, player_id: PlayerIdentifier, score: i32) {
         *self.0.entry(player_id).or_insert(0) += score;
     }
+
+    pub(crate) fn get_player(&self, player: &Player) -> Option<&i32> {
+        self.0.get(&player.meeple_color)
+    }
 }
 
 
@@ -68,7 +72,7 @@ impl Sub for Score {
 
     fn sub(mut self, rhs: Self) -> Self::Output {
         for (player_id, score) in rhs.0.iter() {
-            *self.0.entry(*player_id).or_insert(0) -= score;
+            *self.0.entry(*player_id).or_insert(0) -= *score;
         }
 
         self
@@ -181,8 +185,8 @@ mod tests {
 
     #[test]
     fn should_subtract_scores() {
-        let alice = Player::green();
-        let bob = Player::blue();
+        let alice = Player::red();
+        let bob = Player::green();
         let carol = Player::blue();
 
         let a = Score::from_iter([(&alice, 3), (&carol, 4)]);

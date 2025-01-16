@@ -603,12 +603,13 @@ impl PlacedTile {
         }
     }
 
-    pub(crate) fn own_connected_regions(&self) -> Vec<ConnectedRegion> {
+    pub(crate) fn own_connected_regions(&self, max_connected_region_id: usize) -> Vec<ConnectedRegion> {
         let regions = self.list_placed_tile_regions();
 
         let mut connected_regions: Vec<_> = regions
             .into_iter()
-            .map(|region| {
+            .enumerate()
+            .map(|(index, region)| {
                 let connected_edges: HashMap<PlacedTileEdge, Option<PlacedTileEdge>> = region
                     .region
                     .edges()
@@ -627,7 +628,7 @@ impl PlacedTile {
                 ConnectedRegion {
                     region_type: region.region.region_type(),
                     tile_regions: Vec::from([region]),
-                    id: Uuid::new_v4(),
+                    id: max_connected_region_id + index + 1,
                     adjacent_regions: Default::default(),
                     connected_edges,
                 }

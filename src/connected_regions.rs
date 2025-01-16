@@ -48,7 +48,7 @@ impl PlacedTileRegion {
     }
 }
 
-pub(crate) type ConnectedRegionId = Uuid;
+pub(crate) type ConnectedRegionId = usize;
 
 #[derive(Debug, Clone)]
 pub(crate) struct ConnectedRegion {
@@ -157,7 +157,7 @@ mod tests {
 
     #[test]
     fn should_derive_adjacent_regions() {
-        let regions = PlacedTile::new(&STRAIGHT_ROAD, 0, 0, 0).own_connected_regions();
+        let regions = PlacedTile::new(&STRAIGHT_ROAD, 0, 0, 0).own_connected_regions(0);
 
         assert_eq!(regions.len(), 3);
 
@@ -196,7 +196,7 @@ mod tests {
         let mut test_region = ConnectedRegion {
             region_type: City,
             tile_regions: vec![],
-            id: Uuid::new_v4(),
+            id: 0,
             adjacent_regions: Default::default(),
             connected_edges: Default::default(),
         };
@@ -204,7 +204,7 @@ mod tests {
         let merge_result = test_region.merge_mut(ConnectedRegion {
             region_type: Field,
             tile_regions: vec![],
-            id: Uuid::new_v4(),
+            id: 1,
             adjacent_regions: Default::default(),
             connected_edges: Default::default(),
         });
@@ -218,13 +218,13 @@ mod tests {
     #[test]
     fn should_merge_connected_regions() {
         let mut test_region = PlacedTile::new(&CLOISTER_IN_FIELD, 0, 0, 0)
-            .own_connected_regions()
+            .own_connected_regions(0)
             .into_iter()
             .find(|r| r.region_type == Field)
             .expect("should exist");
 
         let other_region = PlacedTile::new(&THREE_SIDED_CITY, 0, 1, 0)
-            .own_connected_regions()
+            .own_connected_regions(0)
             .into_iter()
             .find(|r| r.region_type == Field)
             .expect("should exist");
@@ -239,14 +239,14 @@ mod tests {
     #[test]
     fn should_merge_connected_region_collection() {
         let mut collection: Vec<_> = PlacedTile::new(&STRAIGHT_ROAD, 0, 0, 0)
-            .own_connected_regions()
+            .own_connected_regions(0)
             .into_iter()
             .filter(|r| r.region_type == Field)
             .collect();
 
         collection.extend(
             PlacedTile::new(&STRAIGHT_ROAD, 1, 0, 0)
-                .own_connected_regions()
+                .own_connected_regions(0)
                 .into_iter()
                 .filter(|r| r.region_type == Field),
         );

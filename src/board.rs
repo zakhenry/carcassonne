@@ -16,12 +16,12 @@ struct RegionScore {
 
 #[derive(Debug, Default, Clone)]
 pub struct Board {
-    // players: Vec<Player>,
     pub(crate) placed_tiles: IndexMap<BoardCoordinate, PlacedTile>,
     connected_regions: HashMap<ConnectedRegionId, ConnectedRegion>,
     region_index: HashMap<PlacedTileEdge, ConnectedRegionId>,
     score_record: Vec<HashMap<Player, u32>>,
     current_score: HashMap<Player, Vec<RegionScore>>,
+    max_connected_region_id: usize
 }
 
 
@@ -99,7 +99,9 @@ impl Board {
         &mut self,
         tile: PlacedTile,
     ) -> Result<TilePlacementSuccess, InvalidTilePlacement> {
-        let tile_connected_regions = tile.own_connected_regions();
+        let tile_connected_regions = tile.own_connected_regions(self.max_connected_region_id);
+
+        self.max_connected_region_id += tile_connected_regions.len();
 
         self.validate_tile_placement(&tile, Some(&tile_connected_regions))?;
 
@@ -115,6 +117,11 @@ impl Board {
 
             for region_id in regions_to_merge {
                 let merge_region = self.connected_regions.remove(&region_id).expect("should exist");
+
+                for (_, mut region ) in &mut self.connected_regions {
+                    region.adjacent_regions.remove(&merge_region.id);
+                    region.adjacent_regions.insert(connected_region.id);
+                }
 
                 connected_region.merge_mut(merge_region).expect("should merge");
             }
@@ -253,7 +260,7 @@ impl Board {
             let tile_connected_regions = if let Some(tile_connected_regions) = tile_connected_regions {
                 tile_connected_regions
             } else {
-                &tile.own_connected_regions()
+                &tile.own_connected_regions(0)
             };
 
             let meeple_connected_regions = tile_connected_regions.iter().filter(|r| {

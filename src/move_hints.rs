@@ -232,7 +232,7 @@ mod tests {
         ]));
 
         assert_eq!(hint.score_delta(&board, &carol, true), Score::from_iter([
-            (&alice, 13), // closed city (12) + cloister addition (1)
+            (&alice, 11), // closed city (12) - 2 already factored city tiles + cloister addition (1)
             (&bob, -1), // city shutout by alice
             (&carol, 3), // farmer gained closed city
         ]));

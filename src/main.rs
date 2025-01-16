@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::{Arc, RwLock};
 use rand::rngs::OsRng;
+use crate::bot_strategy::{Bot, MyopicBot};
 use crate::score::Score;
 
 mod board;
@@ -21,6 +22,7 @@ mod tile_definitions;
 mod score;
 mod move_hints;
 mod test_util;
+mod bot_strategy;
 
 fn main() {
 
@@ -65,28 +67,7 @@ fn main() {
 
         let player = players.get_mut(player_id).expect("should exist");
 
-        let move_hints = board.read().unwrap().get_move_hints(tile, true);
-
-        // create dense board by selecting hints that maximize adjacent placement of tiles
-        let selected_move_hint = move_hints.iter().max_by_key(|&hint| {
-
-            let score_delta = hint.score_delta(&board.read().unwrap(), &player, true);
-
-            let adjacent_region_count = board
-                .read()
-                .unwrap()
-                .list_adjacent_tiles(&hint.tile_placement.coordinate)
-                .iter()
-                .filter_map(|(_, t)| *t)
-                .count();
-
-            let meeple_placement = match hint.meeple_placement {
-                Some(_) => 1,
-                None => 0,
-            };
-
-            adjacent_region_count + meeple_placement
-        });
+        let selected_move_hint = MyopicBot.select_hint(&board.read().unwrap(), &player, tile);
 
         if let Some(random_move) = selected_move_hint {
             let tile = PlacedTile {
