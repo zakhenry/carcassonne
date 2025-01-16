@@ -5,6 +5,7 @@ use crate::tile::{Region, RegionType, RenderStyle};
 use colored::Colorize;
 use std::collections::HashMap;
 use std::ops::{Add, AddAssign, Sub};
+use indexmap::IndexMap;
 
 #[derive(Debug, Default, PartialEq, Clone)]
 pub struct Score(HashMap<PlayerIdentifier, i32>);
@@ -20,7 +21,7 @@ impl Score {
     }
 
     // @todo make a proper pretty table
-    pub(crate) fn render(&self, players: &HashMap<PlayerIdentifier, Player>, render_style: &RenderStyle) -> String {
+    pub(crate) fn render(&self, players: &IndexMap<PlayerIdentifier, Player>, render_style: &RenderStyle) -> String {
 
         let mut out = String::new();
 

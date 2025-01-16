@@ -6,10 +6,12 @@ use rand::prelude::StdRng;
 use rand::{Rng, RngCore, SeedableRng};
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::ops::DerefMut;
 use std::rc::Rc;
 use std::sync::{Arc, RwLock};
+use indexmap::IndexMap;
 use rand::rngs::OsRng;
-use crate::bot_strategy::{Bot, MyopicBot};
+use crate::bot_strategy::{Bot, FillTheGridBot, MyopicBot, RandoBot};
 use crate::score::Score;
 
 mod board;
@@ -33,16 +35,22 @@ fn main() {
 
     let rng = Rc::new(RefCell::new(StdRng::from_seed(seed)));
 
-    let mut alice = Player::blue();
+    let mut alice = Player::red();
     alice.name = Some("Alice".to_string());
-    let mut bob = Player::red();
+    let mut bob = Player::green();
     bob.name = Some("Bob".to_string());
+    let mut carol = Player::blue();
+    carol.name = Some("Carol".to_string());
 
     let render_style = RenderStyle::TrueColor;
 
-    let mut players: HashMap<_, _> = vec![alice, bob]
+    let alice_bot = (alice, Box::new(MyopicBot) as Box<dyn Bot>);
+    let bob_bot = (bob, Box::new(FillTheGridBot::new(StdRng::from_rng(rng.borrow_mut().deref_mut()).unwrap())) as Box<dyn Bot>);
+    let carol_bot = (carol, Box::new(RandoBot::new(StdRng::from_rng(rng.borrow_mut().deref_mut()).unwrap())) as Box<dyn Bot>);
+
+    let mut players: IndexMap<_, (Player, Box<dyn Bot>)> = vec![alice_bot, bob_bot, carol_bot]
         .into_iter()
-        .map(|p| (p.meeple_color, p))
+        .map(|p| (p.0.meeple_color, p))
         .collect();
     let player_ids: Vec<_> = players.keys().copied().collect();
     let mut player_id_iter = player_ids.iter().cycle();
@@ -65,9 +73,9 @@ fn main() {
             .next()
             .expect("should always have a next player while tiles remain");
 
-        let player = players.get_mut(player_id).expect("should exist");
+        let (player,bot_strategy) = players.get_mut(player_id).expect("should exist");
 
-        let selected_move_hint = MyopicBot.select_hint(&board.read().unwrap(), &player, tile);
+        let selected_move_hint = bot_strategy.select_hint(&board.read().unwrap(), &player, tile);
 
         if let Some(random_move) = selected_move_hint {
             let tile = PlacedTile {
@@ -89,7 +97,7 @@ fn main() {
             score += score_delta;
 
             for meeple in liberated_meeple {
-                players.get_mut(&meeple.color).expect("should exist").meeple.push(meeple);
+                players.get_mut(&meeple.color).expect("should exist").0.meeple.push(meeple);
             }
         } else {
             panic!("no move hints?")
@@ -106,5 +114,5 @@ fn main() {
     score += board_score;
 
     println!("{}", board.read().unwrap().render(&render_style));
-    println!("Final score is:\n{}", score.render(&players, &render_style));
+    println!("Final score is:\n{}", score.render(&players.into_iter().map(|(id, (player, _))|(id, player)).collect(), &render_style));
 }
