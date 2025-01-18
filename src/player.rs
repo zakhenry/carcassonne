@@ -97,6 +97,11 @@ impl Player {
     pub(crate) fn yellow() -> Self {
         Self::new(MeepleColor::Yellow)
     }
+
+    pub(crate) fn with_name(mut self, name: &'static str) -> Self {
+        self.name = Some(name.to_string());
+        self
+    }
 }
 
 #[derive(Debug, Clone, Copy, Eq, Hash, PartialEq)]

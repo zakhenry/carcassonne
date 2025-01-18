@@ -1,3 +1,4 @@
+use std::collections::hash_map::Iter;
 use crate::board::Board;
 use crate::connected_regions::ConnectedRegion;
 use crate::player::{Meeple, Player, PlayerIdentifier};
@@ -43,8 +44,12 @@ impl Score {
     pub(crate) fn get_player(&self, player: &Player) -> Option<&i32> {
         self.0.get(&player.meeple_color)
     }
-}
 
+    pub(crate) fn iter(&self) -> Iter<'_, PlayerIdentifier, i32> {
+        self.0.iter()
+    }
+
+}
 
 
 impl Add for Score {
@@ -153,10 +158,16 @@ impl Board {
         let mut score_delta = Score::new();
 
         for connected_region in self.get_connected_regions() {
-            let region_score = connected_region.score(self);
-            for winning_player in connected_region.majority_meeple_player_ids(self) {
-                score_delta.add_score(winning_player, region_score as i32);
+
+            let majority_meeple_player_ids = connected_region.majority_meeple_player_ids(self);
+
+            if !majority_meeple_player_ids.is_empty() {
+                let region_score = connected_region.score(self);
+                for winning_player in majority_meeple_player_ids {
+                    score_delta.add_score(winning_player, region_score as i32);
+                }
             }
+
         }
 
         score_delta
