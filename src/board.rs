@@ -6,6 +6,7 @@ use crate::tile::{BoardCoordinate, CardinalDirection, PlacedTile, Region, Region
 use crate::tile_definitions::RIVER_TERMINATOR;
 use indexmap::{IndexMap, IndexSet};
 use std::collections::{HashMap, HashSet};
+use rayon::prelude::*;
 use crate::score::Score;
 
 #[derive(Debug, Clone)]
@@ -302,7 +303,7 @@ impl Board {
     ) -> Vec<Option<RegionType>> {
         self.list_adjacent_tiles(board_coordinate).iter().flat_map(|(direction, tile)| {
             if let Some(adjacent_tile) = tile {
-                adjacent_tile.list_regions_on_edge(&direction.compass_opposite()).iter().map(|region_type| Some(region_type.clone())).collect()
+                adjacent_tile.list_regions_on_edge(&direction.compass_opposite()).into_iter().map(|region_type| Some(region_type.clone())).collect()
             } else {
                 vec![None; 3]
             }

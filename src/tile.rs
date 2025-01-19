@@ -127,20 +127,17 @@ pub(crate) enum CardinalDirection {
 
 // @todo the methods here are jank or verbose, and there are almost certainly better approaches.
 impl CardinalDirection {
+
     pub(crate) fn rotate(&self, n: usize) -> Self {
-        *PERIMETER_REGION_DIRECTIONS
+
+        let current_index = PERIMETER_REGION_DIRECTIONS
             .iter()
-            .cycle()
-            .skip(
-                n * 3
-                    + PERIMETER_REGION_DIRECTIONS
-                        .iter()
-                        .position(|d| d == self)
-                        .expect("should exist"),
-            )
-            .take(1)
-            .next()
-            .expect("should have a field")
+            .position(|&d| d == *self)
+            .expect("should exist");
+
+        let new_index = (current_index + n * 3) % PERIMETER_REGION_DIRECTIONS.len();
+
+        PERIMETER_REGION_DIRECTIONS[new_index]
     }
 
     pub(crate) fn adjacent(&self) -> (Self, Self) {
@@ -325,39 +322,21 @@ pub struct TileDefinition {
 }
 
 impl TileDefinition {
-    // @todo consider BTreeMap to give an order to the map, thus eliminating `perimeter_regions` method
-    fn directed_regions(&self) -> HashMap<CardinalDirection, &Region> {
-        let mut map = HashMap::with_capacity(PERIMETER_REGION_DIRECTIONS.len());
-
-        for region in self.regions {
-            for edge in region.edges() {
-                map.insert(*edge, region);
-            }
-        }
-
-        map
-    }
     /// The list of region types around the perimeter of the definition
     /// * no rotation applied
     /// * starting from NorthNorthWest, going clockwise
-    fn perimeter_regions(&self) -> Vec<RegionType> {
-        let directed_regions = self.directed_regions();
-
-        PERIMETER_REGION_DIRECTIONS
-            .iter()
-            .filter_map(|direction| directed_regions.get(direction).map(|r| r.region_type()))
-            .collect()
+    fn perimeter_regions(&self) -> [RegionType;12] {
+        PERIMETER_REGION_DIRECTIONS.map(|dir|self.regions.iter().find(|r|r.edges().contains(&dir)).expect("should exist").region_type())
     }
 
-    pub(crate) fn list_oriented_region_types(&self, rotations: u8) -> Vec<RegionType> {
-        let perimeter = self.perimeter_regions();
+    pub(crate) fn list_oriented_region_types(&self, rotations: u8) -> [RegionType;12] {
+        let mut perimeter = self.perimeter_regions();
+
+        let index_offset = ((4 - rotations) * 3) % 12;
+
+        perimeter.rotate_left(index_offset as usize);
 
         perimeter
-            .into_iter()
-            .cycle()
-            .skip(((4 - rotations) * 3) as usize)
-            .take(12)
-            .collect()
     }
 }
 
@@ -701,7 +680,7 @@ impl PlacedTile {
     pub(crate) fn list_regions_on_edge(
         &self,
         cardinal_direction: &CardinalDirection,
-    ) -> Vec<RegionType> {
+    ) -> [RegionType;3] {
         let edges = self
             .tile
             .list_oriented_region_types(self.placement.rotations);
@@ -714,7 +693,9 @@ impl PlacedTile {
             _ => panic!("only primary cardinal directions are supported"),
         };
 
-        edges.into_iter().skip(skip).take(3).collect()
+        let slice = &edges[skip..skip+3];
+
+        [slice[0].clone(), slice[1].clone(), slice[2].clone()]
     }
 
     pub(crate) fn list_placed_tile_regions(&self) -> Vec<PlacedTileRegion> {
@@ -809,7 +790,7 @@ mod tests {
 
         assert_eq!(
             perimeter,
-            vec![City, City, City, Field, Water, Field, Field, Road, Field, Field, Water, Field]
+            [City, City, City, Field, Water, Field, Field, Road, Field, Field, Water, Field]
         )
     }
     #[test]
@@ -818,7 +799,7 @@ mod tests {
 
         assert_eq!(
             perimeter,
-            vec![Field, Water, Field, Field, Road, Field, Field, Water, Field, City, City, City]
+            [Field, Water, Field, Field, Road, Field, Field, Water, Field, City, City, City]
         )
     }
 
@@ -835,19 +816,19 @@ mod tests {
 
         assert_eq!(
             tile.list_regions_on_edge(&CardinalDirection::North),
-            vec![City, City, City]
+            [City, City, City]
         );
         assert_eq!(
             tile.list_regions_on_edge(&CardinalDirection::East),
-            vec![Field, Water, Field]
+            [Field, Water, Field]
         );
         assert_eq!(
             tile.list_regions_on_edge(&CardinalDirection::South),
-            vec![Field, Road, Field]
+            [Field, Road, Field]
         );
         assert_eq!(
             tile.list_regions_on_edge(&CardinalDirection::West),
-            vec![Field, Water, Field]
+            [Field, Water, Field]
         );
     }
 
@@ -864,7 +845,7 @@ mod tests {
 
         assert_eq!(
             tile.list_regions_on_edge(&CardinalDirection::South),
-            vec![Field, Road, Field]
+            [Field, Road, Field]
         );
     }
 

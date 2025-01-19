@@ -5,6 +5,7 @@ use crate::tile::{BoardCoordinate, PlacedTile, RegionType, TileDefinition, TileP
 use indexmap::IndexSet;
 use std::collections::HashSet;
 use std::ops::{Add, Sub};
+use rayon::prelude::*;
 
 pub(crate) struct MoveHint {
     pub(crate) tile: &'static TileDefinition,
@@ -14,29 +15,18 @@ pub(crate) struct MoveHint {
 
 impl Board {
 
-    fn possible_next_tile_coordinates(&self) -> IndexSet<BoardCoordinate> {
+    fn possible_next_tile_coordinates(&self) -> HashSet<BoardCoordinate> {
         if self.placed_tiles.is_empty() {
-            return IndexSet::from([BoardCoordinate::new(0, 0)]);
+            return HashSet::from([BoardCoordinate::new(0, 0)]);
         }
 
-        let mut visited: HashSet<BoardCoordinate> = self.placed_tiles.keys().cloned().collect();
+        let board_coordinates: HashSet<BoardCoordinate> = self.placed_tiles.keys().cloned().collect();
 
-        let mut possible_placements: IndexSet<BoardCoordinate> = IndexSet::new();
+        let expanded_coordinates: HashSet<_> = self.placed_tiles.keys()
+            .flat_map(|coordinate|coordinate.adjacent_coordinates().into_values())
+            .collect();
 
-        for coordinate in self.placed_tiles.keys() {
-            for adjacent_coordinate in coordinate.adjacent_coordinates().values() {
-                if visited.contains(adjacent_coordinate) {
-                    continue;
-                }
-
-                possible_placements.insert(*adjacent_coordinate);
-                visited.insert(*adjacent_coordinate);
-            }
-
-            visited.insert(*coordinate);
-        }
-
-        possible_placements
+        expanded_coordinates.sub(&board_coordinates)
     }
 
     pub(crate) fn get_move_hints(
@@ -50,7 +40,7 @@ impl Board {
             // here we discard duplicate rotated sequences as these represent tiles with rotational
             // symmetry so it doesn't make sense to offer it as a placement variant
 
-            let mut region_sequences: HashSet<Vec<RegionType>> = HashSet::new();
+            let mut region_sequences: HashSet<[RegionType;12]> = HashSet::new();
 
             (0..4).filter(move |&rotations| {
                 let region_sequence = tile.list_oriented_region_types(rotations);
@@ -62,7 +52,7 @@ impl Board {
             })
         });
 
-        candidate_tile_placements.flat_map(|placement| {
+        candidate_tile_placements.par_bridge().flat_map(|placement| {
             let unplaced_meeple_candidate = [(placement.clone(), None)];
 
             if include_meeple_placement_hints {

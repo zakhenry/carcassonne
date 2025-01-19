@@ -8,3 +8,10 @@ colored = "2.2.0"
 indexmap = "2.7.0"
 rand = "0.8.5"
 uuid = { version = "1.11.0", features = ["v4"] }
+base64 = "0.22.1"
+rayon = "1.10.0"
+#tikv-jemallocator = "0.5"
+
+
+[profile.release]
+codegen-units = 1
